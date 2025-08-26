@@ -1,0 +1,455 @@
+import React, { useState } from "react";
+import { FaSearch, FaRegBell } from "react-icons/fa";
+import { IoIosArrowDown } from "react-icons/io";
+import Header from "./Header";
+
+
+
+export default function GodAct9() {
+  const [currentQuestion, setCurrentQuestion] = useState(1);
+  const [starRating, setStarRating] = useState(0);
+  const [ratingExplanation, setRatingExplanation] = useState('');
+  
+  const totalQuestions = 2;
+
+  const handleStarClick = (rating) => {
+    setStarRating(rating);
+  };
+
+  const handleNextQuestion = () => {
+    if (starRating > 0 && ratingExplanation.trim()) {
+      console.log('Star rating:', starRating);
+      console.log('Rating explanation:', ratingExplanation);
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      alert('Please select a star rating and explain why before proceeding.');
+    }
+  };
+
+  const handleTryAgain = () => {
+    setStarRating(0);
+    setRatingExplanation('');
+  };
+
+  return (
+    <div style={{
+      backgroundColor: "#f5f5f5",
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    }}>
+      
+             <style>
+         {`
+           @import url('https://fonts.googleapis.com/css2?family=Comic+Neue&display=swap');
+           @import url('https://fonts.googleapis.com/css2?family=Sen:wght@400;600;800&display=swap');
+           
+           .banner-section {
+             position: relative;
+             width: 100%;
+             height: auto;
+             margin-bottom: 0;
+             flex-shrink: 0;
+           }
+           
+           .banner-img {
+             width: 100%;
+             height: auto;
+             object-fit: cover;
+           }
+           
+           .banner-content {
+             position: absolute;
+             top: 50%;
+             left: 80px;
+             transform: translateY(-50%);
+             color: white;
+             z-index: 5;
+           }
+           
+           .banner-title {
+             font-family: 'Gulten';
+             font-size: 48px;
+             font-weight: 800;
+             color: #2c5f7c;
+             margin: 0;
+             text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+           }
+           
+           .question-indicator {
+             position: absolute;
+             top: 50%;
+             right: 80px;
+             transform: translateY(-50%);
+             background: rgba(255, 255, 255, 0.9);
+             padding: 8px 16px;
+             border-radius: 20px;
+             font-family: 'Sen', sans-serif;
+             font-weight: 600;
+             color: #2c5f7c;
+             font-size: 14px;
+           }
+           
+           .yellow-strip {
+             width: 100%;
+             height: 8px;
+             background: #ffd700;
+             margin-bottom: 10px;
+             flex-shrink: 0;
+           }
+           
+             .main-content {
+             flex: 1;
+             padding: 40px 60px;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             gap: 120px;
+             min-height: 0;
+           }
+
+           .content-with-button {
+             flex: 1;
+             max-width: 650px;
+             display: flex;
+             flex-direction: column;
+             gap: 20px;
+             margin-top: 20px;
+           }
+          
+           .book-image-section {
+             flex: 0 0 auto;
+             margin-top: 20px;
+           }
+          
+           .book-cover {
+             width: 280px;
+             height: 350px;
+             border-radius: 15px;
+             transition: transform 0.3s ease;
+             object-fit: cover;
+           }
+          
+           .question-section {
+             background: white;
+             border-radius: 20px;
+             padding: 40px;
+             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+             border-bottom: 5px solid #ffd700;
+           }
+          
+          .question-title {
+            font-family: 'Sen', sans-serif;
+            font-size: 32px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 30px;
+          }
+          
+          .answer-field {
+            margin-bottom: 30px;
+          }
+          
+          .field-label {
+            font-family: 'Sen', sans-serif;
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            display: block;
+          }
+
+          .field-subtitle {
+            font-family: 'Sen', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            color: #ff9500;
+            background-color: #fff3d4;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+          }
+
+          .star-rating {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 25px;
+          }
+
+          .star {
+            background: none;
+            border: none;
+            font-size: 32px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 4px;
+          }
+
+          .star.outline {
+            color: #ddd;
+          }
+
+          .star.filled {
+            color: #ffd700;
+          }
+
+          .star:hover {
+            transform: scale(1.1);
+          }
+
+          .rating-label {
+            font-family: 'Sen', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: block;
+          }
+
+          .sentence-starters {
+            font-family: 'Sen', sans-serif;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 15px;
+            font-style: italic;
+          }
+
+          .answer-textarea {
+            width: 100%;
+            padding: 18px 24px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            resize: vertical;
+            min-height: 100px;
+          }
+          
+          .answer-textarea:focus {
+            outline: none;
+            border-color: #5bc0de;
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(91, 192, 222, 0.1);
+          }
+          
+          .answer-textarea::placeholder {
+            color: #999;
+            font-style: italic;
+          }
+          
+          .answer-input {
+            width: 100%;
+            padding: 18px 24px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+          }
+          
+          .answer-input:focus {
+            outline: none;
+            border-color: #5bc0de;
+            background-color: white;
+            box-shadow: 0 0 0 3px rgba(91, 192, 222, 0.1);
+          }
+          
+          .answer-input::placeholder {
+            color: #999;
+            font-style: italic;
+          }
+          
+          .button-section {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+          }
+          
+          .btn-next {
+            background: #5bc0de;
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 10px;
+            font-family: 'Sen', sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(91, 192, 222, 0.3);
+          }
+          
+          .btn-next:hover {
+            background: #46a8c7;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(91, 192, 222, 0.4);
+          }
+          
+          .btn-next:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+          }
+          
+           .footer-section {
+             width: 100%;
+             height: 120px;
+             position: relative;
+             overflow: hidden;
+             flex-shrink: 0;
+           }
+           
+           .footer-img {
+             width: 100%;
+             height: 120px;
+             object-fit: cover;
+             display: block;
+           }
+      
+          
+          @media (max-width: 1200px) {
+            .main-content {
+              padding: 40px;
+              gap: 30px;
+            }
+            
+            .book-cover {
+              width: 240px;
+              height: 300px;
+            }
+            
+            .banner-title {
+              font-size: 36px;
+            }
+          }
+          
+          @media (max-width: 768px) {
+            .main-content {
+              flex-direction: column;
+              padding: 30px 20px;
+              gap: 30px;
+              text-align: center;
+            }
+            
+            .book-cover {
+              width: 220px;
+              height: 280px;
+            }
+            
+            .banner-title {
+              font-size: 28px;
+            }
+            
+            .banner-section {
+              padding: 0 20px;
+              height: 160px;
+            }
+            
+            .content-with-button {
+              max-width: 100%;
+            }
+            
+            .button-section {
+              justify-content: center;
+            }
+          }
+        `}
+      </style>
+
+      {/* Header */}
+      <Header />
+      
+             {/* Banner Section */}
+       <div className="banner-section">
+          <img 
+            src="/banner.png" 
+            alt="Banner Background" 
+            className="banner-img"
+          />
+          <div className="banner-content">
+            <h1 className="banner-title">My Star Rating</h1>
+          </div>
+          <div className="question-indicator">
+            QUESTION {currentQuestion}/{totalQuestions}
+          </div>
+        </div>
+        
+        {/* Yellow Strip */}
+ 
+      {/* Main Content */}
+      <div className="main-content">
+         {/* Book Image Section */}
+         <div className="book-image-section">
+           <img 
+             src="/goldilocks.png" 
+             alt="Goldilocks and the Three Bears Book Cover"
+             className="book-cover"
+           />
+         </div>
+
+         {/* Content with Button Section */}
+         <div className="content-with-button">
+           {/* Question Section */}
+           <div className="question-section">
+             <div className="answer-field">
+               <div className="field-subtitle">RATE THE BOOK</div>
+               
+               <div className="star-rating">
+                 {[1, 2, 3, 4, 5].map((star) => (
+                   <button
+                     key={star}
+                     className={`star ${starRating >= star ? 'filled' : 'outline'}`}
+                     onClick={() => handleStarClick(star)}
+                   >
+                     ★
+                   </button>
+                 ))}
+               </div>
+
+               <label className="rating-label">Why I gave this rating</label>
+               <textarea
+                 className="answer-textarea"
+                 placeholder="type answer here"
+                 value={ratingExplanation}
+                 onChange={(e) => setRatingExplanation(e.target.value)}
+                 rows="4"
+               />
+             </div>
+           </div>
+
+           {/* Button Section - Now outside the white box */}
+           <div className="button-section">
+             <button 
+               className="btn-next"
+               onClick={handleNextQuestion}
+               disabled={!starRating || !ratingExplanation.trim()}
+             >
+               NEXT QUESTION
+             </button>
+           </div>
+         </div>
+      </div>
+
+      {/* Footer */}
+      <div className="footer-section">
+        <img 
+          src="/footer.png" 
+          alt="Footer" 
+          className="footer-img"
+        />
+      </div>
+    </div>
+  );
+}
