@@ -1,72 +1,71 @@
-from dotenv import load_dotenv
-import sys
 import os
-
-# Add the parent directory to Python path to allow importing voice_assistant
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Load environment variables from .env
-load_dotenv()
-
-# LiveKit agent libraries
+import sys
+from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import AgentSession, Agent, RoomInputOptions
-from livekit.plugins import noise_cancellation
-from livekit.plugins import google
+from livekit.plugins import noise_cancellation, google
 
-# Absolute imports from your voice_assistant package
-from assistant.prompts import AGENT_INSTRUCTION, SESSION_INSTRUCTION
-from assistant.tools import get_weather, search_web, send_email
+# Add the parent directory to Python path to allow imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Now import from voice_assistant app
+try:
+    from assistant.prompts import AGENT_INSTRUCTION, SESSION_INSTRUCTION
+    from assistant.tools import get_weather, search_web, send_email
+except ImportError:
+    # Fallback to relative imports if the above doesn't work
+    from .prompts import AGENT_INSTRUCTION, SESSION_INSTRUCTION
+    from .tools import get_weather, search_web, send_email
 
-# Define your assistant agent
+# Load environment variables
+load_dotenv()
+
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__(
             instructions=AGENT_INSTRUCTION,
             llm=google.beta.realtime.RealtimeModel(
                 voice="Kore",
-                temperature=0.7,  # Slightly lower for more consistent responses
-                modalities=["text", "audio"],  # Enable both text and audio
+                temperature=0.8,
             ),
-            tools=[
-                get_weather,
-                search_web,
-                send_email
-            ],
+            tools=[get_weather, search_web, send_email],
         )
 
-
-# Define the job entrypoint
 async def entrypoint(ctx: agents.JobContext):
-    # Create the assistant agent
+    # Connect to the room first
+    await ctx.connect()
+    
+    # Create assistant instance
     assistant = Assistant()
     
-    # Create session with proper configuration
-    session = AgentSession(
+    # Create a new AgentSession
+    session = AgentSession()
+
+    # Start the session with named arguments
+    await session.start(
         agent=assistant,
         room=ctx.room,
         room_input_options=RoomInputOptions(
-            # Enable voice input and output
-            video_enabled=False,  # We only need audio for this use case
-            audio_enabled=True,
-            # LiveKit Cloud enhanced noise cancellation
+            video_enabled=True,
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
 
-    # Start the session
-    await session.start()
+    # Send initial greeting
+    await session.generate_reply(instructions=SESSION_INSTRUCTION)
 
-    # Connect to the room
-    await ctx.connect()
+    # On each DataTrack message from the client, generate a reply
+    @ctx.room.on("data_received")
+    async def on_data(payload, _track):
+        await session.generate_reply()
 
-    # Begin the conversation with the opening message
-    await session.generate_reply(
-        instructions=SESSION_INSTRUCTION,
-    )
-
-
-# Launch the agent worker
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+    # Launch the LiveKit agents worker
+    agents.cli.run_app(
+        agents.WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            api_key=os.getenv("LIVEKIT_API_KEY"),
+            api_secret=os.getenv("LIVEKIT_API_SECRET"),
+            ws_url=os.getenv("LIVEKIT_WS_URL"),
+        )
+    )

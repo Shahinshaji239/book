@@ -16,41 +16,36 @@ class Assistant(Agent):
         super().__init__(
             instructions=AGENT_INSTRUCTION,
             llm=google.beta.realtime.RealtimeModel(
-                voice="Kore",
-                temperature=0.8,
-                modalities=["text", "audio"],  # Enable both text and audio
-            ),
+            voice="Kore",
+            temperature=0.8,
+        ),
             tools=[
                 get_weather,
                 search_web,
                 send_email
             ],
+
         )
 
 async def entrypoint(ctx: agents.JobContext):
-    # Create the assistant agent
-    assistant = Assistant()
-    
-    # Create session with proper configuration
     session = AgentSession(
-        agent=assistant,
+        
+    )
+
+    await session.start(
         room=ctx.room,
+        agent=Assistant(),
         room_input_options=RoomInputOptions(
-            # Enable voice input and output
-            video_enabled=False,  # We only need audio for this use case
-            audio_enabled=True,
             # LiveKit Cloud enhanced noise cancellation
+            # - If self-hosting, omit this parameter
+            # - For telephony applications, use `BVCTelephony` for best results
+            video_enabled=True,
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
 
-    # Start the session
-    await session.start()
-
-    # Connect to the room
     await ctx.connect()
 
-    # Begin the conversation with the opening message
     await session.generate_reply(
         instructions=SESSION_INSTRUCTION,
     )
