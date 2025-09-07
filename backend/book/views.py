@@ -1,4 +1,5 @@
 # Django Views (API Only) - No templates needed!
+from venv import logger
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -6,6 +7,7 @@ import json
 import os
 import requests
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -37,7 +39,7 @@ def check_question1_answer(request):
         # Basic validation checks
         if len(user_answer) < 2:
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Please provide a more complete answer.',
                 'feedback_type': 'guidance',
                 'show_answer': False
@@ -45,7 +47,7 @@ def check_question1_answer(request):
 
         if not user_answer[0].isupper():
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Remember to start your answer with a capital letter.',
                 'feedback_type': 'correction',
                 'show_answer': False,
@@ -67,9 +69,7 @@ def analyze_title_answer(user_answer):
     """
     api_key = os.getenv('OPENROUTER_API_KEY2')
     if not api_key:
-        return JsonResponse({
-            'error': 'AI service not configured. Please try again later.'
-        }, status=500)
+        return create_fallback_response(user_answer)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -79,27 +79,38 @@ def analyze_title_answer(user_answer):
         "X-Title": "Story Title Checker"
     }
 
-    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the story title.
+    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the story title. Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
 
 The correct story title is: "Goldilocks and the Three Bears"
 
-IMPORTANT: Always respond with valid JSON in this exact format:
+IMPORTANT: Your entire response MUST be a single, valid JSON object and nothing else.
+
+The required JSON format is:
 {{
-    "is_correct": true/false,
-    "result": "Your feedback message here",
+    "isCorrect": true/false,
+    "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "incorrect",
     "show_answer": true/false,
-    "correct_answer": "Goldilocks and the Three Bears"
+    "correct_answer": "Goldilocks and the Three Bears",
+    "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
-Guidelines:
+Note on "misspelled_words":
+- This must be a list of strings.
+- Only include words that are clearly misspelled. Do not include proper nouns.
+- If there are no spelling mistakes, return an empty list: [].
+
+
+Guidelines for the TITLE question:
 - If the answer is exactly correct or very close (like "goldilocks and the three bears"), mark as correct
 - If they have the main elements but missing something (like just "Goldilocks" or "Three Bears"), mark as partial
 - If they have some right elements but significant errors, give guidance
 - If completely wrong, mark as incorrect
 - Always be encouraging and specific in your feedback
-- If is_correct is false, set show_answer to true
-- If is_correct is true, set show_answer to false
+- If isCorrect is false, set show_answer to true 
+- If isCorrect is true, set show_answer to false 
 
 Student's answer: "{user_answer}\""""
 
@@ -119,14 +130,11 @@ Student's answer: "{user_answer}\""""
             result_raw = response.json()['choices'][0]['message']['content'].strip()
             
             try:
-                # Try to parse JSON response
                 parsed_result = json.loads(result_raw)
-                # Ensure the response has the correct format
                 if 'result' in parsed_result and 'message' not in parsed_result:
                     parsed_result['message'] = parsed_result['result']
                 return JsonResponse(parsed_result)
             except json.JSONDecodeError:
-                # Fallback if AI doesn't return proper JSON
                 return create_fallback_response(user_answer)
         
         return JsonResponse({
@@ -143,53 +151,61 @@ def create_fallback_response(user_answer):
     """
     Create a fallback response if AI service fails
     """
-    user_lower = user_answer.lower()
-    correct_title = "Goldilocks and the Three Bears"
-    
-    # Simple keyword matching as fallback
-    has_goldilocks = 'goldilocks' in user_lower
-    has_three_bears = 'three bears' in user_lower or '3 bears' in user_lower
-    has_bears = 'bear' in user_lower
-    
-    if has_goldilocks and has_three_bears:
+    try:
+        user_lower = user_answer.lower()
+        correct_title = "Goldilocks and the Three Bears"
+        
+        # Simple keyword matching as fallback
+        has_goldilocks = 'goldilocks' in user_lower
+        has_three_bears = 'three bears' in user_lower or '3 bears' in user_lower
+        has_bears = 'bear' in user_lower
+        
+        if has_goldilocks and has_three_bears:
+            return JsonResponse({
+                'isCorrect': True,
+                'message': 'Excellent! You got the title right!',
+                'feedback_type': 'excellent',
+                'show_answer': False,
+                'correct_answer': correct_title
+            })
+        elif has_goldilocks and has_bears:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'Good! You have the main character, but the title also mentions how many bears there are.',
+                'feedback_type': 'partial',
+                'show_answer': True,
+                'correct_answer': correct_title
+            })
+        elif has_goldilocks:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'You got the main character! But the title also includes information about the other characters.',
+                'feedback_type': 'partial',
+                'show_answer': True,
+                'correct_answer': correct_title
+            })
+        elif has_bears:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'You identified some characters, but you\'re missing the main character\'s name.',
+                'feedback_type': 'partial',
+                'show_answer': True,
+                'correct_answer': correct_title
+            })
+        else:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'That\'s not quite right. Think about the main character and the other characters in the story.',
+                'feedback_type': 'incorrect',
+                'show_answer': True,
+                'correct_answer': correct_title
+            })
+    except Exception as e:
         return JsonResponse({
-            'is_correct': True,
-            'message': 'Excellent! You got the title right!',
-            'feedback_type': 'excellent',
-            'show_answer': False,
-            'correct_answer': correct_title
-        })
-    elif has_goldilocks and has_bears:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'Good! You have the main character, but the title also mentions how many bears there are.',
-            'feedback_type': 'partial',
-            'show_answer': True,
-            'correct_answer': correct_title
-        })
-    elif has_goldilocks:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'You got the main character! But the title also includes information about the other characters.',
-            'feedback_type': 'partial',
-            'show_answer': True,
-            'correct_answer': correct_title
-        })
-    elif has_bears:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'You identified some characters, but you\'re missing the main character\'s name.',
-            'feedback_type': 'partial',
-            'show_answer': True,
-            'correct_answer': correct_title
-        })
-    else:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'That\'s not quite right. Think about the main character and the other characters in the story.',
-            'feedback_type': 'incorrect',
-            'show_answer': True,
-            'correct_answer': correct_title
+            'isCorrect': False,
+            'message': 'Please try again.',
+            'feedback_type': 'error',
+            'show_answer': False
         })
 
 @csrf_exempt
@@ -202,6 +218,8 @@ def check_question2_answer(request):
         data = json.loads(request.body)
         user_answer = data.get('answer', '').strip()
         
+        logger.debug(f"Question 2 - Received answer: {user_answer}")
+        
         if not user_answer:
             return JsonResponse({
                 'error': 'Please enter an answer.'
@@ -210,7 +228,7 @@ def check_question2_answer(request):
         # Basic validation checks
         if len(user_answer) < 2:
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Please provide a more complete answer.',
                 'feedback_type': 'guidance',
                 'show_answer': False
@@ -218,7 +236,7 @@ def check_question2_answer(request):
 
         if not user_answer[0].isupper():
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Remember to start your answer with a capital letter.',
                 'feedback_type': 'correction',
                 'show_answer': False,
@@ -228,10 +246,12 @@ def check_question2_answer(request):
         # AI-powered analysis for the author question
         return analyze_author_answer(user_answer)
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {e}")
         return JsonResponse({'error': 'Invalid data format.'}, status=400)
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        logger.error(f"Unexpected error in check_question2_answer: {e}")
+        return JsonResponse({'error': 'Internal server error.'}, status=500)
 
 
 def analyze_author_answer(user_answer):
@@ -239,10 +259,11 @@ def analyze_author_answer(user_answer):
     Use AI to analyze the author answer specifically
     """
     api_key = os.getenv('OPENROUTER_API_KEY2')
+    logger.debug(f"API key exists: {bool(api_key)}")
+    
     if not api_key:
-        return JsonResponse({
-            'error': 'AI service not configured. Please try again later.'
-        }, status=500)
+        logger.warning("OpenRouter API key not found, using fallback")
+        return create_author_fallback_response(user_answer)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -252,7 +273,9 @@ def analyze_author_answer(user_answer):
         "X-Title": "Story Author Checker"
     }
 
-    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the author of "Goldilocks and the Three Bears".
+    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the author of "Goldilocks and the Three Bears". Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
 
 IMPORTANT CONTEXT: "Goldilocks and the Three Bears" is a traditional folk tale with no single author. It has been passed down through oral tradition and has many versions.
 
@@ -267,21 +290,28 @@ CORRECT ANSWERS include (any of these should be marked as correct):
 
 IMPORTANT: Always respond with valid JSON in this exact format:
 {{
-    "is_correct": true/false,
+    "isCorrect": true/false,
     "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "incorrect",
     "show_answer": true/false,
-    "correct_answer": "Traditional folk tale (no single author)"
+    "correct_answer": "Traditional folk tale (no single author)",
+    "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
-Guidelines:
+Note on "misspelled_words":
+- This must be a list of strings.
+- Only include words that are clearly misspelled. Do not include proper nouns.
+- If there are no spelling mistakes, return an empty list: [].
+
+
+Guidelines for the AUTHOR question:
 - If they mention any correct concept (traditional, folk tale, unknown, anonymous, etc.), mark as correct
 - If they give a specific author name that's historically associated (like Robert Southey), mark as good/correct
 - If they give a completely wrong specific author (like "Dr. Seuss"), mark as incorrect
 - If they show understanding that it's not a single author, mark as correct
 - Always be encouraging and educational
-- If is_correct is false, set show_answer to true
-- If is_correct is true, set show_answer to false
+- If isCorrect is false, set show_answer to true
+- If isCorrect is true, set show_answer to false
 
 Student's answer: "{user_answer}\""""
 
@@ -297,8 +327,11 @@ Student's answer: "{user_answer}\""""
 
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=15)
+        logger.debug(f"OpenRouter response status: {response.status_code}")
+        
         if response.status_code == 200:
             result_raw = response.json()['choices'][0]['message']['content'].strip()
+            logger.debug(f"OpenRouter raw response: {result_raw}")
             
             try:
                 # Try to parse JSON response
@@ -307,15 +340,18 @@ Student's answer: "{user_answer}\""""
                 if 'result' in parsed_result and 'message' not in parsed_result:
                     parsed_result['message'] = parsed_result['result']
                 return JsonResponse(parsed_result)
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                logger.warning(f"AI JSON decode error: {e}, using fallback")
                 # Fallback if AI doesn't return proper JSON
                 return create_author_fallback_response(user_answer)
         
+        logger.error(f"OpenRouter API error: {response.status_code}")
         return JsonResponse({
             'error': f'AI service temporarily unavailable. Please try again.'
         }, status=500)
 
     except requests.RequestException as e:
+        logger.error(f"Request exception: {e}")
         return JsonResponse({
             'error': 'Unable to check answer right now. Please try again.'
         }, status=500)
@@ -325,73 +361,145 @@ def create_author_fallback_response(user_answer):
     """
     Create a fallback response for author question if AI service fails
     """
-    user_lower = user_answer.lower()
-    correct_answer = "Traditional folk tale (no single author)"
-    
-    # Keywords that indicate correct understanding
-    correct_keywords = ['traditional', 'folk', 'unknown', 'anonymous', 'fairy tale', 
-                       'oral tradition', 'no author', 'southey']
-    
-    # Obviously wrong authors
-    wrong_authors = ['dr. seuss', 'roald dahl', 'j.k. rowling', 'disney', 
-                    'brothers grimm', 'hans christian andersen']
-    
-    # Check if they understand it's traditional/unknown
-    has_correct_concept = any(keyword in user_lower for keyword in correct_keywords)
-    has_wrong_author = any(wrong in user_lower for wrong in wrong_authors)
-    
-    if has_correct_concept:
+    try:
+        user_lower = user_answer.lower()
+        correct_answer = "Traditional folk tale (no single author)"
+        
+        # Keywords that indicate correct understanding
+        correct_keywords = ['traditional', 'folk', 'unknown', 'anonymous', 'fairy tale', 
+                           'oral tradition', 'no author', 'southey']
+        
+        # Obviously wrong authors
+        wrong_authors = ['dr. seuss', 'roald dahl', 'j.k. rowling', 'disney', 
+                        'brothers grimm', 'hans christian andersen']
+        
+        # Check if they understand it's traditional/unknown
+        has_correct_concept = any(keyword in user_lower for keyword in correct_keywords)
+        has_wrong_author = any(wrong in user_lower for wrong in wrong_authors)
+        
+        if has_correct_concept:
+            return JsonResponse({
+                'isCorrect': True,
+                'message': 'Excellent! You understand that this is a traditional story without a single author.',
+                'feedback_type': 'excellent',
+                'show_answer': False,
+                'correct_answer': correct_answer
+            })
+        elif has_wrong_author:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'That author didn\'t write this story. Remember, this is a very old traditional tale.',
+                'feedback_type': 'incorrect',
+                'show_answer': True,
+                'correct_answer': correct_answer
+            })
+        elif 'robert' in user_lower or 'southey' in user_lower:
+            return JsonResponse({
+                'isCorrect': True,
+                'message': 'Good! Robert Southey did publish an early version, though the story is much older.',
+                'feedback_type': 'good',
+                'show_answer': False,
+                'correct_answer': correct_answer
+            })
+        else:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'Think about how old this story is. Is it a modern story with a specific author, or something much older?',
+                'feedback_type': 'partial',
+                'show_answer': True,
+                'correct_answer': correct_answer
+            })
+    except Exception as e:
+        logger.error(f"Author fallback error: {e}")
         return JsonResponse({
-            'is_correct': True,
-            'message': 'Excellent! You understand that this is a traditional story without a single author.',
-            'feedback_type': 'excellent',
-            'show_answer': False,
-            'correct_answer': correct_answer
+            'isCorrect': False,
+            'message': 'Please try again.',
+            'feedback_type': 'error',
+            'show_answer': False
         })
-    elif has_wrong_author:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'That author didn\'t write this story. Remember, this is a very old traditional tale.',
-            'feedback_type': 'incorrect',
-            'show_answer': True,
-            'correct_answer': correct_answer
-        })
-    elif 'robert' in user_lower or 'southey' in user_lower:
-        return JsonResponse({
-            'is_correct': True,
-            'message': 'Good! Robert Southey did publish an early version, though the story is much older.',
-            'feedback_type': 'good',
-            'show_answer': False,
-            'correct_answer': correct_answer
-        })
-    else:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'Think about how old this story is. Is it a modern story with a specific author, or something much older?',
-            'feedback_type': 'partial',
-            'show_answer': True,
-            'correct_answer': correct_answer
-        })
+        
+        
 
+def analyze_genre_answer(user_answer):
+    """
+    Use AI to analyze the genre answer specifically
+    """
+    api_key = os.getenv('OPENROUTER_API_KEY2')
+    if not api_key:
+        return JsonResponse({'error': 'API Key not configured.'}, status=500)
+
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the genre of "Goldilocks and the Three Bears". Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
+
+The correct broad genre is "Fiction". Other related correct answers include "fairy tale", "folk tale", or "made-up story".
+
+IMPORTANT: The entire response must be a single, valid JSON object. Do not include any text outside of the JSON structure.
+Example valid response:
+{{
+    "isCorrect": true,
+    "message": "Excellent! 'Fiction' is the perfect genre because the story is imaginary and features talking animals.",
+    "feedback_type": "excellent",
+    "show_answer": false,
+    "correct_answer": "Fiction"
+}}
+
+
+Guidelines for the GENRE question:
+- If the answer is "Fiction" or a very close synonym (like "fairy tale", "folk tale", "imaginary"), mark as correct and explain WHY (it's a made-up story with talking animals).
+- If the answer is "Non-Fiction", mark as incorrect and explain the difference.
+- If the answer is a sub-genre like "Comedy", "Adventure", or "Drama", acknowledge their good thinking but explain that the broader category is "Fiction". Mark as "partial" or "good" but not fully correct.
+- Always be encouraging and educational. If isCorrect is false, set show_answer to true.
+
+Student's answer: "{user_answer}\""""
+
+    payload = {
+        "model": "openai/gpt-4o-mini",
+        "messages": [{"role": "system", "content": prompt}],
+        "temperature": 0.3,
+        "max_tokens": 300,
+        "response_format": {"type": "json_object"}
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
+        if response.status_code == 200:
+            # THIS IS THE CORRECTED LOGIC
+            # 1. Get the JSON string from the AI's response.
+            ai_response_string = response.json()['choices'][0]['message']['content']
+            
+            # 2. Parse that string into a Python dictionary.
+            data = json.loads(ai_response_string)
+            
+            # 3. Now, safely pass the dictionary to JsonResponse.
+            return JsonResponse(data)
+            
+        return JsonResponse({'error': 'AI service temporarily unavailable.'}, status=503)
+    except requests.RequestException:
+        return JsonResponse({'error': 'Unable to check answer right now.'}, status=500)
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def check_question3_answer(request):
     """
-    API endpoint to check Question 3 answer - Story Genre (Manual checking, no AI needed)
+    API endpoint to check Question 3 answer - Story Genre (AI-powered)
     """
     try:
         data = json.loads(request.body)
         user_answer = data.get('answer', '').strip()
         
         if not user_answer:
-            return JsonResponse({
-                'error': 'Please select an answer.'
-            }, status=400)
+            return JsonResponse({'error': 'Please select an answer.'}, status=400)
 
-        # Simple manual checking - no AI needed for multiple choice
-        return check_genre_manually(user_answer)
+        # AI-powered analysis for the genre question
+        return analyze_genre_answer(user_answer)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid data format.'}, status=400)
@@ -405,7 +513,7 @@ def check_genre_manually(user_answer):
     """
     if user_answer == 'Fiction':
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Excellent! You\'re absolutely right. Goldilocks is a fiction story because it features imaginary characters and events that didn\'t really happen. Fiction stories are made-up tales like fairy tales, novels, and fantasy stories.',
             'feedback_type': 'excellent',
             'show_answer': False,
@@ -414,7 +522,7 @@ def check_genre_manually(user_answer):
     
     elif user_answer == 'Non-Fiction':
         return JsonResponse({
-            'is_correct': False,
+            'isCorrect': False,
             'message': 'Not quite! Goldilocks is actually fiction because it\'s an imaginary story with made-up characters and talking animals. Non-fiction would be true stories about real people, historical events, biographies, or factual information.',
             'feedback_type': 'incorrect',
             'show_answer': True,
@@ -423,7 +531,7 @@ def check_genre_manually(user_answer):
     
     else:
         return JsonResponse({
-            'is_correct': False,
+            'isCorrect': False,
             'message': 'Please select either Fiction or Non-Fiction.',
             'feedback_type': 'guidance',
             'show_answer': False,
@@ -448,7 +556,7 @@ def check_question4_answer(request):
         # Basic validation checks
         if len(user_answer) < 3:
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Please provide more character names. Think about who the main characters are in this story.',
                 'feedback_type': 'guidance',
                 'show_answer': False
@@ -456,7 +564,7 @@ def check_question4_answer(request):
 
         if not user_answer[0].isupper():
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Remember to start your answer with a capital letter.',
                 'feedback_type': 'correction',
                 'show_answer': False,
@@ -478,9 +586,7 @@ def analyze_characters_answer(user_answer):
     """
     api_key = os.getenv('OPENROUTER_API_KEY2')
     if not api_key:
-        return JsonResponse({
-            'error': 'AI service not configured. Please try again later.'
-        }, status=500)
+        return create_characters_fallback_response(user_answer)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -490,7 +596,9 @@ def analyze_characters_answer(user_answer):
         "X-Title": "Story Characters Checker"
     }
 
-    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the main characters in "Goldilocks and the Three Bears".
+    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the main characters in "Goldilocks and the Three Bears". Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
 
 The main characters are:
 1. Goldilocks (the little girl)
@@ -500,22 +608,28 @@ The main characters are:
 
 IMPORTANT: Always respond with valid JSON in this exact format:
 {{
-    "is_correct": true/false,
+    "isCorrect": true/false,
     "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "needs_improvement",
     "show_answer": true/false,
-    "correct_answer": "Goldilocks, Papa Bear, Mama Bear, and Baby Bear"
+    "correct_answer": "Goldilocks, Papa Bear, Mama Bear, and Baby Bear",
+    "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
-Guidelines:
+Note on "misspelled_words":
+- This must be a list of strings.
+- Only include words that are clearly misspelled. Do not include proper nouns.
+- If there are no spelling mistakes, return an empty list: [].
+
+Guidelines for the CHARACTERS question:
 - If they mention ALL 4 main characters (any variations of names), mark as "excellent"
 - If they mention 3 characters, mark as "good" 
 - If they mention 2 characters, mark as "partial"
 - If they mention 1 or fewer characters, mark as "needs_improvement"
 - Accept various name forms: "Papa/Father/Big/Great Big Bear" etc.
 - Be encouraging even if they missed some characters
-- If is_correct is false (partial/needs_improvement), set show_answer to true
-- If is_correct is true (excellent/good), set show_answer to false
+- If isCorrect is false (partial/needs_improvement), set show_answer to true
+- If isCorrect is true (excellent/good), set show_answer to false
 
 Student's answer: "{user_answer}\""""
 
@@ -541,9 +655,9 @@ Student's answer: "{user_answer}\""""
                 if 'result' in parsed_result and 'message' not in parsed_result:
                     parsed_result['message'] = parsed_result['result']
                 
-                # Set is_correct based on feedback_type
+                # Set isCorrect based on feedback_type
                 feedback_type = parsed_result.get('feedback_type', 'needs_improvement')
-                parsed_result['is_correct'] = feedback_type in ['excellent', 'good']
+                parsed_result['isCorrect'] = feedback_type in ['excellent', 'good']
                     
                 return JsonResponse(parsed_result)
             except json.JSONDecodeError:
@@ -564,48 +678,56 @@ def create_characters_fallback_response(user_answer):
     """
     Create a fallback response for characters question if AI service fails
     """
-    user_lower = user_answer.lower()
-    correct_answer = "Goldilocks, Papa Bear, Mama Bear, and Baby Bear"
-    
-    # Check for character mentions
-    has_goldilocks = 'goldilocks' in user_lower
-    has_papa = any(word in user_lower for word in ['papa', 'father', 'dad', 'big bear', 'great'])
-    has_mama = any(word in user_lower for word in ['mama', 'mother', 'mom', 'medium', 'middle'])
-    has_baby = any(word in user_lower for word in ['baby', 'little', 'small', 'wee', 'tiny'])
-    
-    character_count = sum([has_goldilocks, has_papa, has_mama, has_baby])
-    
-    if character_count >= 4:
+    try:
+        user_lower = user_answer.lower()
+        correct_answer = "Goldilocks, Papa Bear, Mama Bear, and Baby Bear"
+        
+        # Check for character mentions
+        has_goldilocks = 'goldilocks' in user_lower
+        has_papa = any(word in user_lower for word in ['papa', 'father', 'dad', 'big bear', 'great'])
+        has_mama = any(word in user_lower for word in ['mama', 'mother', 'mom', 'medium', 'middle'])
+        has_baby = any(word in user_lower for word in ['baby', 'little', 'small', 'wee', 'tiny'])
+        
+        character_count = sum([has_goldilocks, has_papa, has_mama, has_baby])
+        
+        if character_count >= 4:
+            return JsonResponse({
+                'isCorrect': True,
+                'message': 'Excellent! You identified all the main characters in the story.',
+                'feedback_type': 'excellent',
+                'show_answer': False,
+                'correct_answer': correct_answer
+            })
+        elif character_count == 3:
+            return JsonResponse({
+                'isCorrect': True,
+                'message': 'Good job! You got most of the main characters. You might have missed one.',
+                'feedback_type': 'good',
+                'show_answer': False,
+                'correct_answer': correct_answer
+            })
+        elif character_count == 2:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'You\'re on the right track! You identified some characters, but there are more main characters in this story.',
+                'feedback_type': 'partial',
+                'show_answer': True,
+                'correct_answer': correct_answer
+            })
+        else:
+            return JsonResponse({
+                'isCorrect': False,
+                'message': 'Think about all the main characters - there\'s a little girl and a family of bears. Can you name them all?',
+                'feedback_type': 'needs_improvement',
+                'show_answer': True,
+                'correct_answer': correct_answer
+            })
+    except Exception as e:
         return JsonResponse({
-            'is_correct': True,
-            'message': 'Excellent! You identified all the main characters in the story.',
-            'feedback_type': 'excellent',
-            'show_answer': False,
-            'correct_answer': correct_answer
-        })
-    elif character_count == 3:
-        return JsonResponse({
-            'is_correct': True,
-            'message': 'Good job! You got most of the main characters. You might have missed one.',
-            'feedback_type': 'good',
-            'show_answer': False,
-            'correct_answer': correct_answer
-        })
-    elif character_count == 2:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'You\'re on the right track! You identified some characters, but there are more main characters in this story.',
-            'feedback_type': 'partial',
-            'show_answer': True,
-            'correct_answer': correct_answer
-        })
-    else:
-        return JsonResponse({
-            'is_correct': False,
-            'message': 'Think about all the main characters - there\'s a little girl and a family of bears. Can you name them all?',
-            'feedback_type': 'needs_improvement',
-            'show_answer': True,
-            'correct_answer': correct_answer
+            'isCorrect': False,
+            'message': 'Please try again.',
+            'feedback_type': 'error',
+            'show_answer': False
         })
 
 @csrf_exempt
@@ -626,7 +748,7 @@ def check_question5_answer(request):
         # Basic validation checks
         if len(user_answer) < 3:
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Please provide more details about where the story takes place.',
                 'feedback_type': 'guidance',
                 'show_answer': False
@@ -634,7 +756,7 @@ def check_question5_answer(request):
 
         if not user_answer[0].isupper():
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Remember to start your answer with a capital letter.',
                 'feedback_type': 'correction',
                 'show_answer': False,
@@ -656,9 +778,7 @@ def analyze_setting_answer(user_answer):
     """
     api_key = os.getenv('OPENROUTER_API_KEY2')
     if not api_key:
-        return JsonResponse({
-            'error': 'AI service not configured. Please try again later.'
-        }, status=500)
+        return create_setting_fallback_response(user_answer)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -668,7 +788,9 @@ def analyze_setting_answer(user_answer):
         "X-Title": "Story Setting Checker"
     }
 
-    prompt = f"""You are a helpful reading teacher checking if a student correctly identified where "Goldilocks and the Three Bears" takes place.
+    prompt = f"""You are a helpful reading teacher checking if a student correctly identified where "Goldilocks and the Three Bears" takes place. Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
 
 The main settings in the story are:
 1. The woods/forest/woodland (where the bears go for a walk and where Goldilocks lives)
@@ -682,21 +804,27 @@ CORRECT ANSWERS include any combination of:
 
 IMPORTANT: Always respond with valid JSON in this exact format:
 {{
-    "is_correct": true/false,
+    "isCorrect": true/false,
     "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "needs_improvement",
     "show_answer": true/false,
-    "correct_answer": "In the woods and at the bears' house"
+    "correct_answer": "In the woods and at the bears' house",
+    "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
-Guidelines:
+Note on "misspelled_words":
+- This must be a list of strings.
+- Only include words that are clearly misspelled. Do not include proper nouns.
+- If there are no spelling mistakes, return an empty list: [].
+
+Guidelines for the SETTING question:
 - If they mention BOTH woods/forest AND house/cottage, mark as "excellent"
 - If they mention ONLY woods/forest OR ONLY house/cottage, mark as "good"
 - If they mention something related but incomplete (like just "outside"), mark as "partial"
 - If they give completely wrong locations, mark as "needs_improvement"
 - Be encouraging and explain what settings they got right
-- If is_correct is false (partial/needs_improvement), set show_answer to true
-- If is_correct is true (excellent/good), set show_answer to false
+- If isCorrect is false (partial/needs_improvement), set show_answer to true
+- If isCorrect is true (excellent/good), set show_answer to false
 
 Student's answer: "{user_answer}\""""
 
@@ -722,9 +850,9 @@ Student's answer: "{user_answer}\""""
                 if 'result' in parsed_result and 'message' not in parsed_result:
                     parsed_result['message'] = parsed_result['result']
                 
-                # Set is_correct based on feedback_type
+                # Set isCorrect based on feedback_type
                 feedback_type = parsed_result.get('feedback_type', 'needs_improvement')
-                parsed_result['is_correct'] = feedback_type in ['excellent', 'good']
+                parsed_result['isCorrect'] = feedback_type in ['excellent', 'good']
                     
                 return JsonResponse(parsed_result)
             except json.JSONDecodeError:
@@ -755,7 +883,7 @@ def create_setting_fallback_response(user_answer):
     
     if (has_woods and has_house) or has_bears_house:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Excellent! You identified both main settings - the woods and the bears\' house.',
             'feedback_type': 'excellent',
             'show_answer': False,
@@ -763,7 +891,7 @@ def create_setting_fallback_response(user_answer):
         })
     elif has_woods:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Good! You identified the woods/forest setting. The story also takes place in another important location.',
             'feedback_type': 'good',
             'show_answer': False,
@@ -771,7 +899,7 @@ def create_setting_fallback_response(user_answer):
         })
     elif has_house:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Good! You identified the house setting. The story also takes place in another important outdoor location.',
             'feedback_type': 'good',
             'show_answer': False,
@@ -779,7 +907,7 @@ def create_setting_fallback_response(user_answer):
         })
     else:
         return JsonResponse({
-            'is_correct': False,
+            'isCorrect': False,
             'message': 'Think about where Goldilocks goes and where the bears live. What kind of place is it?',
             'feedback_type': 'needs_improvement',
             'show_answer': True,
@@ -791,33 +919,52 @@ def create_setting_fallback_response(user_answer):
 @require_http_methods(["POST"])
 def check_question6_answer(request):
     """
-    API endpoint to check Question 6 answer - Story Events/What Happens
+    API endpoint to check Question 6 answer - Story Events/What Happens.
+    Now handles both voice (single string) and text (array of strings) submissions.
     """
     try:
         data = json.loads(request.body)
-        user_answers = data.get('answers', [])
         
-        # Filter out empty answers
-        filled_answers = [answer.strip() for answer in user_answers if answer.strip()]
-        
-        if len(filled_answers) < 3:
-            return JsonResponse({
-                'error': 'Please fill in all 3 important story events.'
-            }, status=400)
+        # --- MODIFICATION START ---
 
-        # Basic validation - check if at least one answer starts with capital
-        for i, answer in enumerate(filled_answers):
-            if not answer[0].isupper():
+        # Case 1: Voice submission (receives a single "answer" string)
+        if 'answer' in data:
+            user_answer_string = data.get('answer', '').strip()
+            if not user_answer_string:
+                return JsonResponse({'error': 'No answer was provided.'}, status=400)
+            
+            # For voice input, we send the entire sentence directly to the AI for analysis.
+            return analyze_story_events_answer(user_answer_string)
+
+        # Case 2: Text submission (receives an "answers" array)
+        elif 'answers' in data:
+            user_answers_list = data.get('answers', [])
+            
+            # Filter out empty answers and perform pre-validation as before.
+            filled_answers = [answer.strip() for answer in user_answers_list if answer.strip()]
+            
+            if len(filled_answers) < 3:
                 return JsonResponse({
-                    'is_correct': False,
-                    'message': f'Remember to start each answer with a capital letter (check answer #{i+1}).',
-                    'feedback_type': 'correction',
-                    'show_answer': False,
-                    'highlight_issue': 'capitalization'
-                })
+                    'error': 'Please fill in all 3 important story events.'
+                }, status=400)
 
-        # AI-powered analysis for the story events question
-        return analyze_story_events_answer(filled_answers)
+            for i, answer in enumerate(filled_answers):
+                if not answer[0].isupper():
+                    return JsonResponse({
+                        'isCorrect': False,
+                        'message': f'Remember to start each answer with a capital letter (check answer #{i+1}).',
+                        'feedback_type': 'correction',
+                        'show_answer': False,
+                    })
+
+            # If pre-validation passes, send the list of answers to the AI.
+            return analyze_story_events_answer(filled_answers)
+
+        # Handle cases where neither key is present.
+        else:
+            return JsonResponse({'error': 'Invalid request format. Missing "answer" or "answers" key.'}, status=400)
+        
+        # --- MODIFICATION END ---
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid data format.'}, status=400)
@@ -825,28 +972,39 @@ def check_question6_answer(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-def analyze_story_events_answer(user_answers):
+def analyze_story_events_answer(user_input):
     """
-    Use AI to analyze the story events answers specifically
+    Use AI to analyze the story events answers.
+    This function now accepts either a single string (from voice) or a list of strings (from text).
     """
     api_key = os.getenv('OPENROUTER_API_KEY2')
     if not api_key:
-        return JsonResponse({
-            'error': 'AI service not configured. Please try again later.'
-        }, status=500)
+        return create_story_events_fallback_response(user_input)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://your-app-domain.com",
-        "X-Title": "Story Events Checker"
+        "Content-Type": "application/json"
+        # Add other headers like Referer and Title if required
     }
 
-    # Join the answers for analysis
-    answers_text = "\n".join([f"{i+1}. {answer}" for i, answer in enumerate(user_answers)])
+    # --- MODIFICATION START ---
+    
+    # Adapt the prompt's introduction and the student's answer format based on the input type.
+    if isinstance(user_input, list):
+        answers_text = "\n".join([f"{i+1}. {answer}" for i, answer in enumerate(user_input)])
+        prompt_intro = "Student's 3 answers:"
+    elif isinstance(user_input, str):
+        answers_text = user_input
+        prompt_intro = "Student's spoken answer (a single sentence):"
+    else:
+        # Safeguard for unexpected data types.
+        return JsonResponse({'error': 'Invalid input type for analysis.'}, status=500)
 
-    prompt = f"""You are a helpful reading teacher checking if a student correctly identified important events from "Goldilocks and the Three Bears".
+    # The AI prompt is updated to handle both cases.
+    prompt = f"""You are a helpful reading teacher checking if a student correctly identified important events from "Goldilocks and the Three Bears". Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
 
 The main story events include:
 1. Bears make porridge and go for a walk
@@ -860,31 +1018,39 @@ The main story events include:
 
 IMPORTANT: Always respond with valid JSON in this exact format:
 {{
-    "is_correct": true/false,
+    "isCorrect": true/false,
     "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "needs_improvement", 
     "show_answer": true/false,
-    "correct_answer": "1. Goldilocks enters the bears' house\\n2. She tries their porridge, chairs, and beds\\n3. The bears find her and she runs away"
+    "correct_answer": "1. Goldilocks enters the bears' house\\n2. She tries their porridge, chairs, and beds\\n3. The bears find her and she runs away",
+    "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
-Guidelines:
+Note on "misspelled_words":
+- This must be a list of strings.
+- Only include words that are clearly misspelled. Do not include proper nouns.
+- If there are no spelling mistakes, return an empty list: [].
+
+Guidelines for the STORY EVENTS question:
+- If the student provided a single spoken sentence, first try to extract the 3 main events from it before evaluating.
 - If they identify 3+ major story events correctly, mark as "excellent"
 - If they identify 2 major events correctly, mark as "good"
 - If they identify 1 major event correctly, mark as "partial"
 - If they miss all major events or give vague answers, mark as "needs_improvement"
-- Accept different ways of describing events (e.g., "Goldilocks ate porridge" vs "She tried the porridge")
-- Be encouraging and specific about what they got right
-- If is_correct is false (partial/needs_improvement), set show_answer to true
-- If is_correct is true (excellent/good), set show_answer to false
+- Be encouraging and specific about what they got right.
+- If feedback_type is "partial" or "needs_improvement", set show_answer to true.
+- If feedback_type is "excellent" or "good", set show_answer to false.
 
-Student's 3 answers:
+{prompt_intro}
 {answers_text}"""
+    
+    # --- MODIFICATION END ---
 
     payload = {
         "model": "openai/gpt-4o-mini",
         "messages": [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f'Please analyze these story events: {answers_text}'}
+            {"role": "user", "content": f'Please analyze this answer: {answers_text}'}
         ],
         "temperature": 0.3,
         "max_tokens": 400
@@ -896,29 +1062,33 @@ Student's 3 answers:
             result_raw = response.json()['choices'][0]['message']['content'].strip()
             
             try:
-                # Try to parse JSON response
                 parsed_result = json.loads(result_raw)
-                # Ensure the response has the correct format
-                if 'result' in parsed_result and 'message' not in parsed_result:
-                    parsed_result['message'] = parsed_result['result']
-                
-                # Set is_correct based on feedback_type
                 feedback_type = parsed_result.get('feedback_type', 'needs_improvement')
-                parsed_result['is_correct'] = feedback_type in ['excellent', 'good']
-                    
+                parsed_result['isCorrect'] = feedback_type in ['excellent', 'good']
                 return JsonResponse(parsed_result)
             except json.JSONDecodeError:
-                # Fallback if AI doesn't return proper JSON
-                return create_story_events_fallback_response(user_answers)
+                return create_story_events_fallback_response(user_input)
         
         return JsonResponse({
-            'error': f'AI service temporarily unavailable. Please try again.'
-        }, status=500)
+            'error': 'AI service temporarily unavailable. Please try again.'
+        }, status=503)
 
-    except requests.RequestException as e:
+    except requests.RequestException:
         return JsonResponse({
             'error': 'Unable to check answer right now. Please try again.'
         }, status=500)
+
+# You would also need a fallback function, but the main logic is above.
+def create_story_events_fallback_response(user_input):
+    # This function would contain your non-AI based validation if the AI service fails
+    return JsonResponse({
+        'isCorrect': False,
+        'message': 'We couldn\'t check your answer with the AI, but please review it for the main story points.',
+        'feedback_type': 'needs_improvement',
+        'show_answer': True,
+        'correct_answer': "1. Goldilocks enters the bears' house\n2. She tries their porridge, chairs, and beds\n3. The bears find her and she runs away",
+        'misspelled_words': []
+    })
 
 
 def create_story_events_fallback_response(user_answers):
@@ -944,7 +1114,7 @@ def create_story_events_fallback_response(user_answers):
     
     if correct_elements >= 5:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Excellent! You identified many important events from the story.',
             'feedback_type': 'excellent',
             'show_answer': False,
@@ -952,7 +1122,7 @@ def create_story_events_fallback_response(user_answers):
         })
     elif correct_elements >= 3:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Good job! You got several important story events.',
             'feedback_type': 'good',
             'show_answer': False,
@@ -960,7 +1130,7 @@ def create_story_events_fallback_response(user_answers):
         })
     elif correct_elements >= 1:
         return JsonResponse({
-            'is_correct': False,
+            'isCorrect': False,
             'message': 'You have some story elements, but try to think of more major events that happen.',
             'feedback_type': 'partial',
             'show_answer': True,
@@ -968,7 +1138,7 @@ def create_story_events_fallback_response(user_answers):
         })
     else:
         return JsonResponse({
-            'is_correct': False,
+            'isCorrect': False,
             'message': 'Think about the main things that happen: What does Goldilocks do? What do the bears do?',
             'feedback_type': 'needs_improvement',
             'show_answer': True,
@@ -994,7 +1164,7 @@ def check_goldilocks_favourite_character_answer(request):
         # Basic validation checks
         if len(user_answer) < 10:
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Please write 1-2 complete sentences about your favourite character.',
                 'feedback_type': 'guidance',
                 'show_answer': False
@@ -1002,7 +1172,7 @@ def check_goldilocks_favourite_character_answer(request):
 
         if not user_answer[0].isupper():
             return JsonResponse({
-                'is_correct': False,
+                'isCorrect': False,
                 'message': 'Remember to start your sentence with a capital letter.',
                 'feedback_type': 'correction',
                 'show_answer': False,
@@ -1024,9 +1194,7 @@ def analyze_goldilocks_favourite_character_answer(user_answer):
     """
     api_key = os.getenv('OPENROUTER_API_KEY2')
     if not api_key:
-        return JsonResponse({
-            'error': 'AI service not configured. Please try again later.'
-        }, status=500)
+        return create_goldilocks_favourite_character_fallback_response(user_answer)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -1036,7 +1204,9 @@ def analyze_goldilocks_favourite_character_answer(user_answer):
         "X-Title": "Goldilocks Favourite Character Checker"
     }
 
-    prompt = f"""You are a helpful reading teacher checking if a student wrote thoughtfully about their favourite character from "Goldilocks and the Three Bears".
+    prompt = f"""You are a helpful reading teacher checking if a student wrote thoughtfully about their favourite character from "Goldilocks and the Three Bears". Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
 
 The main characters in the Goldilocks story are:
 - Goldilocks (the curious little girl who enters the bears' house)
@@ -1046,11 +1216,17 @@ The main characters in the Goldilocks story are:
 
 IMPORTANT: Always respond with valid JSON in this exact format:
 {{
-    "is_correct": true/false,
+    "isCorrect": true/false,
     "message": "Your encouraging feedback message here",
     "feedback_type": "excellent", "good", "partial", or "needs_improvement",
     "show_answer": false
+    "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
+
+Note on "misspelled_words":
+- This must be a list of strings.
+- Only include words that are clearly misspelled. Do not include proper nouns.
+- If there are no spelling mistakes, return an empty list: [].
 
 Guidelines for "My Favourite Character" question:
 - If they mention a valid character AND give a good reason why they like them, mark as "excellent"
@@ -1088,9 +1264,9 @@ Student's answer: "{user_answer}\""""
                 if 'result' in parsed_result and 'message' not in parsed_result:
                     parsed_result['message'] = parsed_result['result']
                 
-                # Set is_correct based on feedback_type
+                # Set isCorrect based on feedback_type
                 feedback_type = parsed_result.get('feedback_type', 'needs_improvement')
-                parsed_result['is_correct'] = feedback_type in ['excellent', 'good', 'partial']
+                parsed_result['isCorrect'] = feedback_type in ['excellent', 'good', 'partial']
                 
                 return JsonResponse(parsed_result)
             except json.JSONDecodeError:
@@ -1130,35 +1306,35 @@ def create_goldilocks_favourite_character_fallback_response(user_answer):
     
     if character_mentioned and has_reasoning and len(user_answer) >= 20:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Excellent! You chose a character from the Goldilocks story and gave a great explanation of why you like them.',
             'feedback_type': 'excellent',
             'show_answer': False
         })
     elif character_mentioned and has_reasoning and len(user_answer) >= 10:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'Good job! You chose a character from the story and explained why you like them.',
             'feedback_type': 'good',
             'show_answer': False
         })
     elif character_mentioned and len(user_answer) >= 8:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'You mentioned a character from the story! Can you tell us more about why they are your favourite?',
             'feedback_type': 'partial',
             'show_answer': False
         })
     elif character_mentioned:
         return JsonResponse({
-            'is_correct': True,
+            'isCorrect': True,
             'message': 'You chose a character from the Goldilocks story! Try to write a bit more about why you like them.',
             'feedback_type': 'partial',
             'show_answer': False
         })
     else:
         return JsonResponse({
-            'is_correct': False,
+            'isCorrect': False,
             'message': 'Remember to choose one of the characters from the Goldilocks and the Three Bears story (Goldilocks, Papa Bear, Mama Bear, or Baby Bear) and explain why you like them.',
             'feedback_type': 'needs_improvement',
             'show_answer': False
@@ -1168,7 +1344,7 @@ def create_goldilocks_favourite_character_fallback_response(user_answer):
 @require_http_methods(["POST"])
 def check_question8_answer(request):
     """
-    API endpoint to check Question 8 answer - Favourite Character (Creative/Opinion)
+    API endpoint to check Question 8 answer - Story Moral/Lesson
     """
     try:
         data = json.loads(request.body)
@@ -1176,29 +1352,29 @@ def check_question8_answer(request):
         
         if not user_answer:
             return JsonResponse({
-                'error': 'Please write about your favourite character.'
+                'error': 'Please write about the lesson or moral of the story.'
             }, status=400)
 
         # Basic validation checks
         if len(user_answer) < 10:
             return JsonResponse({
-                'is_correct': True,  # Creative questions are always "correct"
-                'message': 'Try to write a bit more about why you like this character. Add more details about what makes them special to you.',
+                'isCorrect': False,
+                'message': 'Please write 1-2 complete sentences about what lesson or moral you learned from the story.',
                 'feedback_type': 'guidance',
                 'show_answer': False
             })
 
         if not user_answer[0].isupper():
             return JsonResponse({
-                'is_correct': True,
-                'message': 'Remember to start your answer with a capital letter, but great job sharing your thoughts!',
+                'isCorrect': False,
+                'message': 'Remember to start your sentence with a capital letter.',
                 'feedback_type': 'correction',
                 'show_answer': False,
                 'highlight_issue': 'capitalization'
             })
 
-        # AI-powered analysis for the favourite character question
-        return analyze_favourite_character_answer(user_answer)
+        # AI-powered analysis for the moral/lesson question
+        return analyze_moral_answer(user_answer)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid data format.'}, status=400)
@@ -1206,55 +1382,59 @@ def check_question8_answer(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
-def analyze_favourite_character_answer(user_answer):
+def analyze_moral_answer(user_answer):
     """
-    Use AI to analyze the favourite character answer specifically
+    Use AI to analyze the moral/lesson answer specifically
     """
     api_key = os.getenv('OPENROUTER_API_KEY2')
     if not api_key:
-        return JsonResponse({
-            'error': 'AI service not configured. Please try again later.'
-        }, status=500)
+        return create_moral_fallback_response(user_answer)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://your-app-domain.com",
-        "X-Title": "Favourite Character Checker"
+        "X-Title": "Story Moral Checker"
     }
 
-    prompt = f"""You are an encouraging reading teacher evaluating a student's creative response about their favourite character from "Goldilocks and the Three Bears".
+    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the moral or lesson from "Goldilocks and the Three Bears". Your task is twofold:
+1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+2. Identify any misspelled English words in their answer.
 
-This is a CREATIVE/OPINION question - there are no wrong answers! The characters in the story are:
-- Goldilocks (the curious girl)
-- Papa Bear (the father bear)
-- Mama Bear (the mother bear) 
-- Baby Bear (the little bear)
+The main morals/lessons from the Goldilocks story include:
+- Don't enter someone else's home without permission
+- Respect other people's property
+- Don't take things that don't belong to you
+- Be careful and think before you act
+- Don't be too curious or nosy
+- Respect boundaries and privacy
+- Think about how your actions affect others
 
 IMPORTANT: Always respond with valid JSON in this exact format:
 {{
-    "is_correct": true,
+    "isCorrect": true/false,
     "message": "Your encouraging feedback message here",
-    "feedback_type": "excellent", "good", or "guidance",
-    "show_answer": false,
-    "character_mentioned": "character name or 'unclear'"
+    "feedback_type": "excellent", "good", "partial", or "needs_improvement",
+    "show_answer": false
+    "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
-Guidelines for this CREATIVE question:
-- ALWAYS set is_correct to true (opinions can't be wrong!)
-- ALWAYS set show_answer to false (no "correct" answer for opinions)
-- If they mention a character from the story and give a reason, mark as "excellent"
-- If they mention a character but give minimal reasoning, mark as "good" 
-- If unclear which character or no reasoning, mark as "guidance"
-- Be very encouraging and positive - this is their personal opinion
-- Ask follow-up questions to encourage deeper thinking
-- Celebrate their creativity and personal connection to the story
+Note on "misspelled_words":
+- This must be a list of strings.
+- Only include words that are clearly misspelled. Do not include proper nouns.
+- If there are no spelling mistakes, return an empty list: [].
 
-Focus on:
-1. Did they identify a character from the story?
-2. Did they give reasons/explanations for their choice?
-3. Do they show personal connection or understanding?
+Guidelines for moral/lesson question:
+- If they identify a clear moral/lesson from the story, mark as "excellent"
+- If they mention a related concept but not quite the main lesson, mark as "good"
+- If they have some understanding but it's unclear, mark as "partial"
+- If they don't mention any lesson or give unrelated answers, mark as "needs_improvement"
+- Accept various ways of expressing the same concept (e.g., "don't go in houses" vs "respect privacy")
+- Always be encouraging and positive about their understanding
+- Focus on whether they understood that Goldilocks' actions were wrong
+- For moral questions, never show a "correct answer" since there can be multiple valid interpretations
+- Always set show_answer to false
 
 Student's answer: "{user_answer}\""""
 
@@ -1262,10 +1442,10 @@ Student's answer: "{user_answer}\""""
         "model": "openai/gpt-4o-mini",
         "messages": [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f'Please analyze this favourite character response: "{user_answer}"'}
+            {"role": "user", "content": f'Please analyze this moral/lesson answer: "{user_answer}"'}
         ],
-        "temperature": 0.7,  # Higher temperature for creative responses
-        "max_tokens": 300
+        "temperature": 0.3,
+        "max_tokens": 250
     }
 
     try:
@@ -1280,14 +1460,14 @@ Student's answer: "{user_answer}\""""
                 if 'result' in parsed_result and 'message' not in parsed_result:
                     parsed_result['message'] = parsed_result['result']
                 
-                # Force creative questions to be "correct"
-                parsed_result['is_correct'] = True
-                parsed_result['show_answer'] = False
-                    
+                # Set isCorrect based on feedback_type
+                feedback_type = parsed_result.get('feedback_type', 'needs_improvement')
+                parsed_result['isCorrect'] = feedback_type in ['excellent', 'good', 'partial']
+                
                 return JsonResponse(parsed_result)
             except json.JSONDecodeError:
                 # Fallback if AI doesn't return proper JSON
-                return create_favourite_character_fallback_response(user_answer)
+                return create_moral_fallback_response(user_answer)
         
         return JsonResponse({
             'error': f'AI service temporarily unavailable. Please try again.'
@@ -1299,46 +1479,63 @@ Student's answer: "{user_answer}\""""
         }, status=500)
 
 
-def create_favourite_character_fallback_response(user_answer):
+def create_moral_fallback_response(user_answer):
     """
-    Create a fallback response for favourite character question if AI service fails
+    Create a fallback response for moral/lesson question if AI service fails
     """
     user_lower = user_answer.lower()
     
-    # Check if they mentioned any characters
-    characters = {
-        'goldilocks': 'goldilocks' in user_lower,
-        'papa_bear': any(word in user_lower for word in ['papa bear', 'father bear', 'big bear', 'papa']),
-        'mama_bear': any(word in user_lower for word in ['mama bear', 'mother bear', 'mama']),
-        'baby_bear': any(word in user_lower for word in ['baby bear', 'little bear', 'small bear', 'baby'])
+    # Check for moral/lesson keywords
+    moral_keywords = {
+        'permission': any(word in user_lower for word in ['permission', 'ask', 'allowed', 'invited']),
+        'property': any(word in user_lower for word in ['property', 'belong', 'theirs', 'not mine', 'not yours']),
+        'respect': any(word in user_lower for word in ['respect', 'polite', 'manners', 'courteous']),
+        'careful': any(word in user_lower for word in ['careful', 'think', 'before', 'consider']),
+        'curious': any(word in user_lower for word in ['curious', 'nosy', 'snoop', 'spy']),
+        'boundaries': any(word in user_lower for word in ['boundaries', 'privacy', 'private', 'personal']),
+        'wrong': any(word in user_lower for word in ['wrong', 'bad', 'shouldn\'t', 'not right', 'mistake']),
+        'home': any(word in user_lower for word in ['home', 'house', 'enter', 'go in', 'break in'])
     }
     
-    mentioned_character = any(characters.values())
-    has_reasoning = any(word in user_lower for word in ['because', 'like', 'love', 'favorite', 'favourite', 'think', 'feel'])
+    # Check for reasoning/explanation words
+    reasoning_words = ['because', 'since', 'when', 'if', 'then', 'so', 'therefore', 'learned', 'teaches']
+    has_reasoning = any(word in user_lower for word in reasoning_words)
     
-    if mentioned_character and has_reasoning:
+    # Count how many moral concepts they mentioned
+    moral_concepts = sum(moral_keywords.values())
+    
+    if moral_concepts >= 2 and has_reasoning and len(user_answer) >= 20:
         return JsonResponse({
-            'is_correct': True,
-            'message': 'Wonderful! I love how you explained why this character is your favourite. Your personal connection to the story shows great thinking!',
+            'isCorrect': True,
+            'message': 'Excellent! You identified important lessons from the Goldilocks story and explained them well.',
             'feedback_type': 'excellent',
             'show_answer': False
         })
-    elif mentioned_character:
+    elif moral_concepts >= 1 and has_reasoning and len(user_answer) >= 15:
         return JsonResponse({
-            'is_correct': True,
-            'message': 'Great choice! Can you tell me a bit more about what makes this character special to you?',
+            'isCorrect': True,
+            'message': 'Good job! You understood an important lesson from the story.',
             'feedback_type': 'good',
+            'show_answer': False
+        })
+    elif moral_concepts >= 1 and len(user_answer) >= 10:
+        return JsonResponse({
+            'isCorrect': True,
+            'message': 'You have the right idea! Can you explain more about why this lesson is important?',
+            'feedback_type': 'partial',
+            'show_answer': False
+        })
+    elif moral_concepts >= 1:
+        return JsonResponse({
+            'isCorrect': True,
+            'message': 'You mentioned something about the story! Try to write more about what lesson or moral you learned.',
+            'feedback_type': 'partial',
             'show_answer': False
         })
     else:
         return JsonResponse({
-            'is_correct': True,
-            'message': 'I can see you\'re thinking about the story! Try to mention which character is your favourite and explain why you like them.',
-            'feedback_type': 'guidance',
+            'isCorrect': False,
+            'message': 'Think about what Goldilocks did wrong in the story. What lesson can we learn from her actions?',
+            'feedback_type': 'needs_improvement',
             'show_answer': False
         })
-
-
-# Add this to your URLs.py:
-"""
-"""
