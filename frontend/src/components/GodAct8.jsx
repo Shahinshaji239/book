@@ -1,16 +1,233 @@
-import React, { useState } from "react";
-import { FaSearch, FaRegBell } from "react-icons/fa";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { FaSearch, FaRegBell, FaVolumeUp, FaPlay } from "react-icons/fa";
 import { IoIosArrowDown } from "react-icons/io";
 import Header from "./Header";
 
 export default function GodAct8() {
+  const navigate = useNavigate();
   const [currentQuestion, setCurrentQuestion] = useState(8);
   const [favouriteCharacterAnswer, setFavouriteCharacterAnswer] = useState('');
   const [feedback, setFeedback] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [audioPlayed, setAudioPlayed] = useState(false);
+  const [showPlayButton, setShowPlayButton] = useState(false);
+  
+  // Voice state variables
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [useElevenLabs, setUseElevenLabs] = useState(true);
+  const [currentAudio, setCurrentAudio] = useState(null);
   
   const totalQuestions = 9;
+
+  // ElevenLabs configuration
+  const ELEVENLABS_API_KEY = import.meta.env.VITE_ELEVENLABS_API_KEY || 'your-api-key-here';
+  const VOICE_ID = 'pqHfZKP75CvOlQylNhV4';
+
+  // Audio functionality for character question
+  useEffect(() => {
+    const playCharacterAudio = () => {
+      try {
+        const audio = new Audio('/fav.mp3');
+        audio.volume = 0.7;
+        
+        audio.addEventListener('loadeddata', () => {
+          console.log('Character audio loaded successfully');
+        });
+        
+        audio.addEventListener('ended', () => {
+          console.log('Character audio playback completed');
+          setAudioPlayed(true);
+        });
+        
+        audio.addEventListener('error', (e) => {
+          console.error('Character audio error:', e);
+          setShowPlayButton(true);
+        });
+        
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('Character audio started playing automatically');
+              setAudioPlayed(false);
+            })
+            .catch((error) => {
+              console.log('Autoplay prevented by browser:', error);
+              setShowPlayButton(true);
+            });
+        }
+        
+        return audio;
+      } catch (error) {
+        console.error('Error setting up character audio:', error);
+        setShowPlayButton(true);
+        return null;
+      }
+    };
+
+    const timer = setTimeout(() => {
+      playCharacterAudio();
+    }, 800);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Voice initialization
+  useEffect(() => {
+    const loadVoices = () => {
+      window.speechSynthesis.getVoices();
+    };
+    
+    loadVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  // Manual play function
+  const handleManualPlay = () => {
+    try {
+      const audio = new Audio('/fav.mp3');
+      audio.volume = 0.7;
+      
+      audio.addEventListener('ended', () => {
+        setAudioPlayed(true);
+        setShowPlayButton(false);
+      });
+      
+      audio.play().then(() => {
+        setShowPlayButton(false);
+        console.log('Character audio started playing manually');
+      }).catch((error) => {
+        console.error('Manual play failed:', error);
+      });
+    } catch (error) {
+      console.error('Error in manual play:', error);
+    }
+  };
+
+  // ElevenLabs speech function
+  const speakWithElevenLabs = async (text) => {
+    if (!voiceEnabled || !text || !ELEVENLABS_API_KEY || ELEVENLABS_API_KEY === 'your-api-key-here') {
+      console.log('ElevenLabs not configured, falling back to browser speech');
+      return speakWithBrowserSynthesis(text);
+    }
+
+    try {
+      setIsSpeaking(true);
+      
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_API_KEY
+        },
+        body: JSON.stringify({
+          text: text,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: {
+            stability: 0.6,
+            similarity_boost: 0.7,
+            style: 0.3,
+            use_speaker_boost: true
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`ElevenLabs API error: ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      setCurrentAudio(audio);
+      
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+        console.error('Audio playback failed, falling back to browser speech');
+        speakWithBrowserSynthesis(text);
+      };
+
+      await audio.play();
+      
+    } catch (error) {
+      console.error('ElevenLabs TTS error:', error);
+      setIsSpeaking(false);
+      setCurrentAudio(null);
+      speakWithBrowserSynthesis(text);
+    }
+  };
+
+  // Browser speech synthesis
+  const speakWithBrowserSynthesis = (text, options = {}) => {
+    window.speechSynthesis.cancel();
+    
+    if (!voiceEnabled || !text) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    utterance.rate = options.rate || 0.9;
+    utterance.pitch = options.pitch || 1.1;
+    utterance.volume = options.volume || 0.8;
+    
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(voice => 
+      voice.name.includes('Female') || 
+      voice.name.includes('Karen') || 
+      voice.name.includes('Samantha') ||
+      voice.name.includes('Google') ||
+      (voice.lang.startsWith('en') && voice.name.includes('UK'))
+    );
+    
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Main speech function
+  const speakText = (text) => {
+    if (useElevenLabs) {
+      speakWithElevenLabs(text);
+    } else {
+      speakWithBrowserSynthesis(text);
+    }
+  };
+
+  // Stop speaking function
+  const stopSpeaking = () => {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+      setCurrentAudio(null);
+    }
+    
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  };
 
   const submitAnswer = async () => {
     setIsLoading(true);
@@ -32,17 +249,33 @@ export default function GodAct8() {
       const data = await response.json();
       
       if (data.error) {
-        setFeedback({ message: data.error, is_correct: true }); // Creative questions are always "correct"
+        setFeedback({ message: data.error, is_correct: true, feedback_type: 'excellent' });
       } else {
         setFeedback(data);
-        setShowAnswer(data.show_answer || false); // Creative questions don't show "correct" answers
+        setShowAnswer(data.show_answer || false);
+        
+        // Voice feedback for creative questions
+        setTimeout(() => {
+          let voiceText = "";
+          
+          if (data.feedback_type === 'excellent') {
+            voiceText = "Excellent! " + data.message;
+          } else if (data.feedback_type === 'good') {
+            voiceText = "Great work! " + data.message;
+          } else {
+            voiceText = "Nice try! " + data.message;
+          }
+          
+          console.log('Speaking:', voiceText);
+          speakText(voiceText);
+        }, 500);
       }
     } catch (error) {
       console.error('Network error:', error);
       if (error.message.includes('404')) {
-        setFeedback({ message: 'API endpoint not found. Please check if the backend server is running.', is_correct: true });
+        setFeedback({ message: 'API endpoint not found. Please check if the backend server is running.', is_correct: true, feedback_type: 'excellent' });
       } else {
-        setFeedback({ message: 'Network error. Please check your connection and try again.', is_correct: true });
+        setFeedback({ message: 'Network error. Please check your connection and try again.', is_correct: true, feedback_type: 'excellent' });
       }
     } finally {
       setIsLoading(false);
@@ -52,10 +285,8 @@ export default function GodAct8() {
   const handleNextQuestion = async () => {
     if (favouriteCharacterAnswer.trim()) {
       if (currentQuestion === 8) {
-        // For question 8, check the answer first
         await submitAnswer();
       } else {
-        // For subsequent questions, proceed directly
         console.log('Favourite character answer:', favouriteCharacterAnswer);
         setCurrentQuestion(currentQuestion + 1);
         setFeedback(null);
@@ -67,13 +298,12 @@ export default function GodAct8() {
   };
 
   const handleProceedToNext = () => {
-    // Logic to go to Question 9 - you can implement routing here
-    console.log('Proceeding to Question 9...');
-    // Example: navigate('/question9') or setCurrentQuestion(9)
-    alert('Question 9 will be implemented next!');
+    stopSpeaking();
+    navigate('/GodAct9');
   };
 
   const handleTryAgain = () => {
+    stopSpeaking();
     setFavouriteCharacterAnswer('');
     setFeedback(null);
     setShowAnswer(false);
@@ -137,6 +367,65 @@ export default function GodAct8() {
              font-weight: 600;
              color: #2c5f7c;
              font-size: 14px;
+           }
+
+           .audio-play-button {
+             position: absolute;
+             top: 20px;
+             right: 20px;
+             background: rgba(35, 167, 172, 0.9);
+             border: none;
+             border-radius: 50%;
+             width: 50px;
+             height: 50px;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             cursor: pointer;
+             transition: all 0.3s ease;
+             z-index: 10;
+             color: white;
+             font-size: 18px;
+             box-shadow: 0 4px 12px rgba(35, 167, 172, 0.3);
+           }
+
+           .audio-play-button:hover {
+             background: rgba(30, 138, 143, 0.95);
+             transform: scale(1.1);
+             box-shadow: 0 6px 16px rgba(35, 167, 172, 0.4);
+           }
+
+           .audio-play-button.playing {
+             background: rgba(40, 167, 69, 0.9);
+             animation: pulse 2s infinite;
+           }
+
+           @keyframes pulse {
+             0% { transform: scale(1); }
+             50% { transform: scale(1.05); }
+             100% { transform: scale(1); }
+           }
+
+           .voice-toggle-button {
+             position: absolute;
+             top: 20px;
+             display: none;
+             right: 80px;
+             background: ${voiceEnabled ? '#28a745' : '#dc3545'};
+             border: none;
+             border-radius: 20px;
+             padding: 8px 16px;
+             color: white;
+             font-size: 12px;
+             cursor: pointer;
+             font-family: 'Sen', sans-serif;
+             font-weight: 600;
+             z-index: 10;
+             transition: all 0.3s ease;
+           }
+
+           .voice-toggle-button:hover {
+             transform: scale(1.05);
            }
            
            .yellow-strip {
@@ -365,6 +654,7 @@ export default function GodAct8() {
             padding: 30px;
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
             border-left: 5px solid;
+            position: relative;
           }
           
           .feedback-section.excellent {
@@ -402,6 +692,33 @@ export default function GodAct8() {
           
           .feedback-title.guidance {
             color: #ffc107;
+          }
+
+          .voice-replay-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(35, 167, 172, 0.1);
+            border: 1px solid #23A7AC;
+            border-radius: 20px;
+            padding: 6px 12px;
+            color: #23A7AC;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: 'Sen', sans-serif;
+            font-weight: 600;
+            transition: all 0.3s ease;
+          }
+
+          .voice-replay-button:hover {
+            background: #23A7AC;
+            color: white;
+          }
+
+          .voice-replay-button.speaking {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
           }
           
           .feedback-message {
@@ -443,10 +760,11 @@ export default function GodAct8() {
            }
       
           
-          @media (max-width: 1200px) {
+          /* IMPROVED RESPONSIVE DESIGN - SAME AS GODACT1, GODACT2, GODACT3, GODACT4, GODACT5, GODACT6 & GODACT7 */
+          @media (max-width: 1024px) {
             .main-content {
-              padding: 40px;
-              gap: 30px;
+              padding: 30px 40px;
+              gap: 60px;
             }
             
             .book-cover {
@@ -462,31 +780,242 @@ export default function GodAct8() {
           @media (max-width: 768px) {
             .main-content {
               flex-direction: column;
-              padding: 30px 20px;
+              padding: 20px;
               gap: 30px;
-              text-align: center;
+            
+            }
+            
+            .book-image-section {
+              order: 1;
+              margin-top: 0;
+              padding: 0 20px;
             }
             
             .book-cover {
-              width: 220px;
-              height: 280px;
-            }
-            
-            .banner-title {
-              font-size: 28px;
-            }
-            
-            .banner-section {
-              padding: 0 20px;
-              height: 160px;
+              width: 100%;
+              max-width: 280px;
+              height: auto;
+              aspect-ratio: 4/5;
             }
             
             .content-with-button {
+              order: 2;
               max-width: 100%;
+              margin-top: 0;
+            }
+            
+            .question-section {
+              padding: 25px 20px;
+              margin-top: 0;
+            }
+
+            .question-title {
+              font-size: 24px;
+              margin-bottom: 20px;
+              text-align: center;
+            }
+            
+            .field-label {
+              font-size: 18px;
+              margin-bottom: 12px;
+            }
+
+            .field-subtitle {
+              font-size: 11px;
+              padding: 6px 10px;
+              margin-bottom: 12px;
+            }
+
+            .sentence-starters {
+              font-size: 13px;
+              margin-bottom: 12px;
+            }
+
+            .answer-textarea {
+              padding: 15px 20px;
+              font-size: 15px;
+              min-height: 100px;
             }
             
             .button-section {
               justify-content: center;
+              flex-wrap: wrap;
+              gap: 12px;
+            }
+            
+            .btn-next, .btn-try-again, .btn-proceed {
+              padding: 12px 24px;
+              font-size: 13px;
+              min-width: 120px;
+            }
+            
+            .feedback-section {
+              padding: 20px;
+              margin-top: 15px;
+            }
+            
+            .feedback-title {
+              font-size: 20px;
+            }
+            
+            .feedback-message {
+              font-size: 15px;
+            }
+            
+            .banner-title {
+              font-size: 24px;
+              left: 30px;
+            }
+            
+            .banner-section {
+              height: 120px;
+            }
+            
+            .question-indicator {
+              right: 30px;
+              padding: 6px 12px;
+              font-size: 12px;
+            }
+
+            .audio-play-button {
+              top: 15px;
+              right: 15px;
+              width: 40px;
+              height: 40px;
+              font-size: 14px;
+            }
+
+            .voice-toggle-button {
+              right: 60px;
+              padding: 5px 10px;
+              font-size: 10px;
+              display: block;
+              display: none;
+            }
+            
+            .voice-replay-button {
+              position: static;
+              margin-bottom: 15px;
+              width: fit-content;
+              align-self: flex-end;
+            }
+          }
+
+          @media (max-width: 480px) {
+            .main-content {
+              padding: 15px;
+              gap: 20px;
+            }
+            
+            .book-image-section {
+              padding: 0 10px;
+            }
+            
+            .question-section {
+              padding: 20px 15px;
+            }
+
+            .question-title {
+              font-size: 20px;
+              margin-bottom: 15px;
+            }
+            
+            .field-label {
+              font-size: 16px;
+            }
+
+            .field-subtitle {
+              font-size: 10px;
+              padding: 5px 8px;
+            }
+
+            .sentence-starters {
+              font-size: 12px;
+              margin-bottom: 10px;
+            }
+
+            .answer-textarea {
+              padding: 12px 16px;
+              font-size: 14px;
+              min-height: 80px;
+            }
+            
+            .btn-next, .btn-try-again, .btn-proceed {
+              padding: 10px 20px;
+              font-size: 12px;
+              min-width: 100px;
+            }
+            
+            .feedback-section {
+              padding: 15px;
+            }
+            
+            .feedback-title {
+              font-size: 18px;
+            }
+            
+            .feedback-message {
+              font-size: 14px;
+            }
+            
+            .banner-title {
+              font-size: 18px;
+              left: 20px;
+            }
+            
+            .question-indicator {
+              right: 20px;
+              padding: 4px 8px;
+              font-size: 11px;
+            }
+
+            .audio-play-button {
+              width: 35px;
+              height: 35px;
+              font-size: 12px;
+            }
+
+            .voice-toggle-button {
+              right: 50px;
+              padding: 4px 8px;
+              font-size: 9px;
+              display: none;
+            }
+          }
+
+          /* iPhone-specific adjustments */
+          @media (max-width: 414px) and (max-height: 896px) {
+            .banner-section {
+              height: 100px;
+            }
+            
+            .main-content {
+              padding: 10px;
+            }
+            
+            .book-cover {
+              max-width: 250px;
+            }
+            
+            .question-section {
+              border-radius: 15px;
+            }
+
+            .question-title {
+              font-size: 18px;
+            }
+
+            .answer-textarea {
+              border-radius: 10px;
+              min-height: 70px;
+            }
+
+            .field-label {
+              font-size: 15px;
+            }
+
+            .sentence-starters {
+              font-size: 11px;
             }
           }
         `}
@@ -498,16 +1027,31 @@ export default function GodAct8() {
              {/* Banner Section */}
        <div className="banner-section">
           <img 
-            src="/banner.png" 
+            src="/b8.png" 
             alt="Banner Background" 
             className="banner-img"
           />
-          <div className="banner-content">
-            <h1 className="banner-title">My Favourite Character</h1>
-          </div>
-          <div className="question-indicator">
-            QUESTION {currentQuestion}/{totalQuestions}
-          </div>
+       
+          
+          {/* Voice Toggle Button */}
+          <button 
+            className="voice-toggle-button"
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            title={voiceEnabled ? "Mute voice feedback" : "Enable voice feedback"}
+          >
+            {voiceEnabled ? '🔊 Voice ON' : '🔇 Voice OFF'}
+          </button>
+          
+          {/* Audio Play Button */}
+          {showPlayButton && (
+            <button 
+              className="audio-play-button"
+              onClick={handleManualPlay}
+              title="Click to play audio introduction"
+            >
+              <FaPlay />
+            </button>
+          )}
         </div>
         
         {/* Yellow Strip */}
@@ -544,54 +1088,84 @@ export default function GodAct8() {
              </div>
            </div>
 
-           {/* Feedback Section */}
-           {feedback && (
-             <div className={`feedback-section ${feedback.feedback_type || 'excellent'}`}>
-               <div className={`feedback-title ${feedback.feedback_type || 'excellent'}`}>
-                 {feedback.feedback_type === 'excellent' ? '⭐ Excellent!' : 
-                  feedback.feedback_type === 'good' ? '👍 Great!' : '💭 Keep Going!'}
-               </div>
-               <div className="feedback-message">
-                 {feedback.message}
-               </div>
-             </div>
-           )}
+          {/* Feedback Section */}
+          {feedback && (
+            <div className={`feedback-section ${
+              feedback.isCorrect ? 'correct' : 
+              feedback.feedback_type === 'partial' ? 'partial' : 'incorrect'
+            }`}>
+              {/* Voice Replay Button */}
+              <button 
+                className={`voice-replay-button ${isSpeaking ? 'speaking' : ''}`}
+                onClick={() => {
+                  if (isSpeaking) {
+                    stopSpeaking();
+                  } else {
+                    let voiceText = feedback.message;
+                    speakText(voiceText);
+                  }
+                }}
+                title={isSpeaking ? "Stop speaking" : "Replay feedback"}
+              >
+                {isSpeaking ? '⏹️ Stop' : '🔊 Replay'}
+              </button>
 
-           {/* Button Section */}
-           <div className="button-section">
-             {!feedback ? (
-               <button 
-                 className="btn-next"
-                 onClick={handleNextQuestion}
-                 disabled={!favouriteCharacterAnswer.trim() || isLoading}
-               >
-                 {isLoading ? (
-                   <>
-                     <span className="loading-spinner"></span>
-                     CHECKING...
-                   </>
-                 ) : (
-                   'CHECK ANSWER'
-                 )}
-               </button>
-             ) : (
-               <div style={{ display: 'flex', gap: '15px' }}>
-                 <button 
-                   className="btn-try-again"
-                   onClick={handleTryAgain}
-                 >
-                   WRITE MORE
-                 </button>
-                 <button 
-                   className="btn-proceed"
-                   onClick={handleProceedToNext}
-                 >
-                   NEXT QUESTION
-                 </button>
-               </div>
-             )}
-           </div>
-         </div>
+              <div className={`feedback-title ${
+                feedback.isCorrect ? 'correct' : 
+                feedback.feedback_type === 'partial' ? 'partial' : 'incorrect'
+              }`}>
+                {feedback.isCorrect ? '✓ Great Job!' : 
+                 feedback.feedback_type === 'partial' ? '~ Good Start' : '✗ Needs More Detail'}
+              </div>
+              <div className="feedback-message">
+                {feedback.message}
+              </div>
+              {showAnswer && feedback.correct_answer && (
+                <div className="correct-answer">
+                  <div className="correct-answer-title">Complete Answer:</div>
+                  <div className="correct-answer-text">{feedback.correct_answer}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Button Section */}
+          <div className="button-section">
+            {!feedback ? (
+              <button 
+                className="btn-next"
+                onClick={handleNextQuestion}
+                disabled={!favouriteCharacterAnswer.trim() || isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <span className="loading-spinner"></span>
+                    CHECKING...
+                  </>
+                ) : (
+                  'CHECK ANSWER'
+                )}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: '15px' }}>
+                {!feedback.isCorrect && (
+                  <button 
+                    className="btn-try-again"
+                    onClick={handleTryAgain}
+                  >
+                    TRY AGAIN
+                  </button>
+                )}
+                <button 
+                  className="btn-proceed"
+                  onClick={handleProceedToNext}
+                >
+                  NEXT QUESTION
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Footer */}

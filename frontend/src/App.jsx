@@ -27,6 +27,8 @@ import PetAct12 from './components/PetAct12'
 import PetAct13 from './components/PetAct13'
 import PetAct14 from './components/PetAct14'
 import PetAct15 from './components/PetAct15'
+import Paragraph from './components/Paragraph'
+import AiPeter from './components/AiPeter'
 function App() {
 
 
@@ -34,8 +36,8 @@ function App() {
   
      
      <Routes>
-      <Route path="/" element={<FlipStory />} />
-      <Route path="/flipstory2" element={<FlipStory2 />} />
+      <Route path="/" element={<FlipStory2 />} />
+      <Route path="/flipstory2" element={<FlipStory />} />
       <Route path="/GodAct1" element={<GodAct1 />} />
       <Route path="/GodAct2" element={<GodAct2 />} />
       <Route path="/GodAct3" element={<GodAct3 />} />
@@ -60,6 +62,8 @@ function App() {
       <Route path="/PetAct13" element={<PetAct13 />} />
       <Route path="/PetAct14" element={<PetAct14 />} />
       <Route path="/PetAct15" element={<PetAct15 />} />
+      <Route path="/Paragraph" element={<Paragraph />} />
+      <Route path="/Aipeter" element={<AiPeter />} />
 
     </Routes>
   )
