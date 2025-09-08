@@ -37,7 +37,7 @@ export default function GodAct1() {
     setActivityStarted(true);
     resetTranscript();
 
-    const questionAudio = new Audio('/title.mp3');
+    const questionAudio = new Audio('/title_1.mp3');
     questionAudio.play().catch(() => setShowPlayButton(true));
 
     questionAudio.onended = () => {

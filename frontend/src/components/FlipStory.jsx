@@ -498,7 +498,7 @@ export default function PeterRabbitFlipbook() {
           background-size: cover;
           background-position: center top;
           background-repeat: no-repeat;
-          background-image: url('https://ik.imagekit.io/td5ykows9/WhatsApp%20Image%202025-09-01%20at%2018.07.49_81ccf5b0.jpg?updatedAt=1756750119491');
+          background-image: url('https://ik.imagekit.io/td5ykows9/rabbit%20backround.jpg?updatedAt=1757324165723');
           display: flex;
           align-items: center;
           justify-content: center;
@@ -939,11 +939,9 @@ export default function PeterRabbitFlipbook() {
           }}
         >
           {/* Front Cover */}
-          <PageCover backgroundImage="https://ik.imagekit.io/td5ykows9/WhatsApp%20Image%202025-09-01%20at%2018.07.49_81ccf5b0.jpg?updatedAt=1756750119491">
+          <PageCover backgroundImage="https://ik.imagekit.io/td5ykows9/rabbit%20backround.jpg?updatedAt=1757324165723">
             <div className="page-cover__content">
-              <div className="cover-title">THE TALE OF<br/>PETER RABBIT</div>
-              <div className="cover-subtitle">by Beatrix Potter</div>
-              <div className="cover-author">A Classic Children's Story</div>
+
             </div>
           </PageCover>
 
@@ -971,7 +969,6 @@ export default function PeterRabbitFlipbook() {
           <PageCover backgroundImage="https://ik.imagekit.io/td5ykows9/WhatsApp%20Image%202025-09-01%20at%2018.07.49_81ccf5b0.jpg?updatedAt=1756750119491">
             <div style={{ 
               padding: '40px', 
-              background: 'rgba(250, 248, 241, 0.9)', 
               borderRadius: '15px',
               textAlign: 'center',
               position: 'relative',
@@ -980,11 +977,8 @@ export default function PeterRabbitFlipbook() {
               flexDirection: 'column',
               justifyContent: 'center'
             }}>
-              <h2 style={{color: '#2d5016', marginBottom: '20px'}}>The End</h2>
-              <p style={{color: '#567c3e', fontSize: '1.1rem', lineHeight: 1.6}}>
-                This classic story teaches us about the importance of listening<br/>
-                to your parents and the consequences of disobedience.
-              </p>
+              <h2 style={{color: '#2d5016', marginBottom: '20px'}}></h2>
+
               
               {/* Quiz Button */}
               <button
@@ -997,6 +991,7 @@ export default function PeterRabbitFlipbook() {
                   color: 'white',
                   border: 'none',
                   padding: '10px 16px',
+                  display: 'none',
                   borderRadius: '8px',
                   fontSize: '0.9rem',
                   fontWeight: '600',

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
-import { FaPlay, FaMicrophone, FaMicrophoneSlash, FaRocket } from "react-icons/fa";
+import { FaPlay, FaMicrophone, FaMicrophoneSlash, FaRocket, FaRedo } from "react-icons/fa";
 import Header from "./Header";
 
 export default function GodAct3() {
@@ -13,10 +13,8 @@ export default function GodAct3() {
   const [isLoading, setIsLoading] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
 
-  // State ported for the voice workflow
   const [interactionStage, setInteractionStage] = useState('voice');
   const [isQuestionFinished, setIsQuestionFinished] = useState(false);
-  const [showPlayButton, setShowPlayButton] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentAudio, setCurrentAudio] = useState(null);
   const [currentUtterance, setCurrentUtterance] = useState(null);
@@ -33,45 +31,68 @@ export default function GodAct3() {
     browserSupportsSpeechRecognition
   } = useSpeechRecognition();
 
-  // --- AUTOMATION LOGIC (adapted for GodAct3) ---
+  // --- FAILSAFE BUTTON HANDLER - RELOADS THE ENTIRE PAGE ---
+  const handleFailsafeRestart = () => {
+    // Stop any ongoing audio/speech
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    SpeechRecognition.stopListening();
+    
+    // Reload the entire page to reset everything
+    window.location.reload();
+  };
 
-  useEffect(() => {
+  // --- FUNCTION TO START SESSION ---
+  const startSession = () => {
     resetTranscript();
+
     if (!browserSupportsSpeechRecognition) {
       alert("This browser doesn't support speech recognition.");
       return;
     }
+
     const questionAudio = new Audio('/genre.mp3');
+
     const timer = setTimeout(() => {
-      questionAudio.play().catch(() => setShowPlayButton(true));
+      questionAudio.play().catch(() => console.warn("Audio autoplay blocked."));
     }, 500);
+
     questionAudio.onended = () => {
-      console.log("DEBUG: Question 3 audio finished.");
+      console.log("DEBUG: Question audio finished.");
       setIsQuestionFinished(true);
     };
+
     return () => {
       clearTimeout(timer);
       questionAudio.pause();
       SpeechRecognition.stopListening();
     };
-  }, [browserSupportsSpeechRecognition, resetTranscript]);
+  };
 
+  // --- AUTO START ON PAGE LOAD (PRIMARY ACTIVATION METHOD) ---
   useEffect(() => {
-    // Only start listening if all three conditions are met.
+    const cleanup = startSession();
+    return cleanup;
+  }, []);
+
+  // Effect 2: Starts listening after the question is finished
+  useEffect(() => {
     if (isQuestionFinished && !listening && interactionStage === 'voice') {
       console.log("DEBUG: Conditions met. Starting to listen...");
       SpeechRecognition.startListening({ continuous: false, language: 'en-US' });
     }
-  }, [isQuestionFinished, listening, interactionStage]); // Add interactionStage to the dependency array
+  }, [isQuestionFinished, listening, interactionStage]);
 
+  // Effect 3: Auto-submit voice answer
   useEffect(() => {
     if (finalTranscript && !isLoading) {
-      console.log("DEBUG: Original transcript received:", finalTranscript);
-
-      // ADD THIS LINE to capitalize the first letter.
       const capitalizedAnswer = finalTranscript.charAt(0).toUpperCase() + finalTranscript.slice(1);
-
-      console.log("DEBUG: Submitting capitalized transcript:", capitalizedAnswer);
+      console.log("DEBUG: Original transcript received:", capitalizedAnswer);
       submitAnswer(capitalizedAnswer, 'voice');
     }
   }, [finalTranscript, isLoading]);
@@ -90,53 +111,41 @@ export default function GodAct3() {
     setIsSpeaking(false);
   };
 
-  const speakWithElevenLabs = (text, onEndCallback = () => { }) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
-          method: 'POST',
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': ELEVENLABS_API_KEY
-          },
-          body: JSON.stringify({
-            text: text,
-            model_id: 'eleven_monolingual_v1',
-            voice_settings: { stability: 0.6, similarity_boost: 0.7 }
-          })
-        });
+  const speakWithElevenLabs = async (text, onEndCallback = () => { }) => {
+    try {
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_API_KEY
+        },
+        body: JSON.stringify({
+          text: text,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: { stability: 0.6, similarity_boost: 0.7 }
+        })
+      });
 
-        if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
+      if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
 
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        setCurrentAudio(audio);
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      setCurrentAudio(audio);
 
-        audio.onended = () => {
-          setIsSpeaking(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-          onEndCallback();
-          resolve();
-        };
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+        onEndCallback();
+      };
 
-        audio.onerror = (e) => {
-          setIsSpeaking(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-          onEndCallback();
-          reject(e);
-        };
-
-        await audio.play();
-
-      } catch (error) {
-        console.error('ElevenLabs TTS error:', error);
-        reject(error);
-      }
-    });
+      await audio.play();
+    } catch (error) {
+      console.error('ElevenLabs TTS error:', error);
+      speakWithBrowserSynthesis(text, {}, onEndCallback);
+    }
   };
 
   const speakWithBrowserSynthesis = (text, options = {}, onEndCallback = () => { }) => {
@@ -144,13 +153,6 @@ export default function GodAct3() {
     setCurrentUtterance(utterance);
 
     utterance.onend = () => {
-      setIsSpeaking(false);
-      setCurrentUtterance(null);
-      onEndCallback();
-    };
-
-    utterance.onerror = (event) => {
-      console.error('SpeechSynthesisUtterance.onerror', event);
       setIsSpeaking(false);
       setCurrentUtterance(null);
       onEndCallback();
@@ -194,7 +196,6 @@ export default function GodAct3() {
       }
 
       if (submissionType === 'voice') {
-        console.log("Verbal feedback to be spoken:", data.message);
         speakText(data.message, () => {
           setInteractionStage('text');
           const nextPromptAudio = new Audio('/select.mp3');
@@ -222,21 +223,6 @@ export default function GodAct3() {
       submitAnswer(genreAnswer, 'text');
     }
   };
-
-  // const renderHighlightedText = (text, misspelledWords) => {
-  //   if (!misspelledWords || misspelledWords.length === 0) {
-  //     return text;
-  //   }
-  //   // Create a regex to find all misspelled words, ignoring case
-  //   const regex = new RegExp(`(${misspelledWords.join('|')})`, 'gi');
-  //   const parts = text.split(regex);
-
-  //   return parts.map((part, index) =>
-  //     misspelledWords.some(word => word.toLowerCase() === part.toLowerCase())
-  //       ? <span key={index} style={{ backgroundColor: '#FFD700', borderRadius: '3px' }}>{part}</span>
-  //       : part
-  //   );
-  // };
 
   const handleProceedToNext = () => {
     stopSpeaking();
@@ -310,48 +296,38 @@ export default function GodAct3() {
             font-size: 14px;
           }
 
-          .audio-play-button {
+          .failsafe-button {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(35, 167, 172, 0.9);
+            background: rgba(68, 199, 216, 0.9);
             border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            border-radius: 25px;
+            padding: 8px 16px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 6px;
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 10;
             color: white;
-            font-size: 18px;
-            box-shadow: 0 4px 12px rgba(35, 167, 172, 0.3);
+            font-size: 12px;
+            font-family: 'Sen', sans-serif;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
           }
 
-          .audio-play-button:hover {
-            background: rgba(30, 138, 143, 0.95);
-            transform: scale(1.1);
-            box-shadow: 0 6px 16px rgba(35, 167, 172, 0.4);
-          }
-
-          .audio-play-button.playing {
-            background: rgba(40, 167, 69, 0.9);
-            animation: pulse 2s infinite;
-          }
-
-          @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+          .failsafe-button:hover {
+            background: rgba(50, 159, 173, 0.9);
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
           }
 
           .voice-toggle-button {
             position: absolute;
             top: 20px;
-            right: 80px;
             display: none;
+            right: 140px;
             background: ${voiceEnabled ? '#28a745' : '#dc3545'};
             border: none;
             border-radius: 20px;
@@ -367,7 +343,6 @@ export default function GodAct3() {
 
           .voice-toggle-button:hover {
             transform: scale(1.05);
-            display: none;
           }
           
           .yellow-strip {
@@ -683,7 +658,7 @@ export default function GodAct3() {
            display: block;
          }
 
-          /* IMPROVED RESPONSIVE DESIGN - SAME AS GODACT1 & GODACT2 */
+          /* IMPROVED RESPONSIVE DESIGN */
           @media (max-width: 1024px) {
             .main-content {
               padding: 30px 40px;
@@ -797,20 +772,18 @@ export default function GodAct3() {
               font-size: 12px;
             }
 
-            .audio-play-button {
+            .failsafe-button {
               top: 15px;
               right: 15px;
-              width: 40px;
-              height: 40px;
-              font-size: 14px;
+              padding: 6px 12px;
+              font-size: 11px;
             }
 
             .voice-toggle-button {
-              right: 60px;
+              right: 120px;
               padding: 5px 10px;
               font-size: 10px;
               display: block;
-              display: none;
             }
             
             .voice-replay-button {
@@ -883,17 +856,17 @@ export default function GodAct3() {
               font-size: 11px;
             }
 
-            .audio-play-button {
-              width: 35px;
-              height: 35px;
-              font-size: 12px;
+            .failsafe-button {
+              top: 10px;
+              right: 10px;
+              padding: 5px 10px;
+              font-size: 10px;
             }
 
             .voice-toggle-button {
-              right: 50px;
+              right: 100px;
               padding: 4px 8px;
               font-size: 9px;
-              display: none;
             }
           }
 
@@ -922,6 +895,11 @@ export default function GodAct3() {
             .radio-option {
               border-radius: 6px;
             }
+
+            .failsafe-button {
+              font-size: 9px;
+              padding: 4px 8px;
+            }
           }
        `}
       </style>
@@ -929,7 +907,16 @@ export default function GodAct3() {
 
       <div className="banner-section">
         <img src="/b3.png" alt="Banner Background" className="banner-img" />
-        {/* ... other banner content ... */}
+
+        {/* --- FAILSAFE RESTART BUTTON --- */}
+        <button
+          className="failsafe-button"
+          onClick={handleFailsafeRestart}
+          title="Restart Session (Failsafe)"
+        >
+          <FaRedo size={14} />
+          RESTART
+        </button>
       </div>
 
       <div className="main-content">
@@ -969,7 +956,7 @@ export default function GodAct3() {
                         value="Fiction"
                         checked={genreAnswer === 'Fiction'}
                         onChange={(e) => setGenreAnswer(e.target.value)}
-                        disabled={isLoading}
+                        disabled={isLoading || !!feedback}
                       />
                       <span className="radio-text">Fiction</span>
                     </label>
@@ -980,7 +967,7 @@ export default function GodAct3() {
                         value="Non-Fiction"
                         checked={genreAnswer === 'Non-Fiction'}
                         onChange={(e) => setGenreAnswer(e.target.value)}
-                        disabled={isLoading}
+                        disabled={isLoading || !!feedback}
                       />
                       <span className="radio-text">Non-Fiction</span>
                     </label>
@@ -1031,7 +1018,7 @@ export default function GodAct3() {
                     onClick={handleTextSubmit}
                     disabled={!genreAnswer || isLoading}
                   >
-                    {isLoading ? 'CHECKING...' : 'CHECK ANSWER'}
+                    {isLoading ? <><span className="loading-spinner"></span>CHECKING...</> : 'CHECK ANSWER'}
                   </button>
                 ) : (
                   <div style={{ display: 'flex', gap: '15px' }}>

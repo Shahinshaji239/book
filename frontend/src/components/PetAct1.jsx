@@ -37,7 +37,7 @@ export default function PetAct1() {
     setActivityStarted(true);
     resetTranscript();
 
-    const questionAudio = new Audio('/title.mp3');
+    const questionAudio = new Audio('/title_1.mp3');
     questionAudio.play().catch(() => setShowPlayButton(true));
 
     questionAudio.onended = () => {
@@ -423,7 +423,6 @@ export default function PetAct1() {
             border-radius: 15px;
             transition: transform 0.3s ease;
             object-fit: cover;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
           }
          
           .question-section {
@@ -899,9 +898,9 @@ export default function PetAct1() {
       <Header />
 
       <div className="banner-section">
-        <img src="/b1.png" alt="Banner Background" className="banner-img" />
+        <img src="/tp1.png" alt="Banner Background" className="banner-img" />
         {showPlayButton && (
-          <button className="audio-play-button" onClick={() => new Audio('/peter_title.mp3').play()}>
+          <button className="audio-play-button" onClick={() => new Audio('/title_1.mp3').play()}>
             <FaPlay />
           </button>
         )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
-import { FaPlay, FaMicrophone, FaMicrophoneSlash } from "react-icons/fa";
+import { FaPlay, FaMicrophone, FaMicrophoneSlash, FaRedo } from "react-icons/fa";
 import Header from "./Header";
 
 export default function GodAct6() {
@@ -14,7 +14,6 @@ export default function GodAct6() {
   const [showAnswer, setShowAnswer] = useState(false);
   const [interactionStage, setInteractionStage] = useState('voice');
   const [isQuestionFinished, setIsQuestionFinished] = useState(false);
-  const [showPlayButton, setShowPlayButton] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentAudio, setCurrentAudio] = useState(null);
   const [currentUtterance, setCurrentUtterance] = useState(null);
@@ -31,10 +30,24 @@ export default function GodAct6() {
     browserSupportsSpeechRecognition
   } = useSpeechRecognition();
 
-  // --- AUTOMATION LOGIC (from GodAct2) ---
+  // --- FAILSAFE BUTTON HANDLER - RELOADS THE ENTIRE PAGE ---
+  const handleFailsafeRestart = () => {
+    // Stop any ongoing audio/speech
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    SpeechRecognition.stopListening();
+    
+    // Reload the entire page to reset everything
+    window.location.reload();
+  };
 
-  // Effect 1: Plays the initial question audio automatically
-  useEffect(() => {
+  // --- FUNCTION TO START SESSION ---
+  const startSession = () => {
     resetTranscript();
 
     if (!browserSupportsSpeechRecognition) {
@@ -42,16 +55,14 @@ export default function GodAct6() {
       return;
     }
 
-    // ADAPTATION: Using the audio file for question 6
     const questionAudio = new Audio('/choose.mp3');
 
-    // Using a short timeout to ensure a smooth transition
     const timer = setTimeout(() => {
-      questionAudio.play().catch(() => setShowPlayButton(true));
+      questionAudio.play().catch(() => console.warn("Audio autoplay blocked."));
     }, 500);
 
     questionAudio.onended = () => {
-      console.log("DEBUG: Question 6 audio finished.");
+      console.log("DEBUG: Question audio finished.");
       setIsQuestionFinished(true);
     };
 
@@ -60,7 +71,13 @@ export default function GodAct6() {
       questionAudio.pause();
       SpeechRecognition.stopListening();
     };
-  }, [browserSupportsSpeechRecognition, resetTranscript]);
+  };
+
+  // --- AUTO START ON PAGE LOAD (PRIMARY ACTIVATION METHOD) ---
+  useEffect(() => {
+    const cleanup = startSession();
+    return cleanup;
+  }, []);
 
   // Effect 2: Starts listening after the question is finished
   useEffect(() => {
@@ -68,16 +85,14 @@ export default function GodAct6() {
       console.log("DEBUG: Conditions met. Starting to listen for Q6 answer...");
       SpeechRecognition.startListening({ continuous: false, language: 'en-US' });
 
-      // Since continuous mode doesn't stop on its own, we'll set a 
-      // timeout to automatically stop it after 10 seconds.
+      // Timeout to automatically stop listening after 10 seconds for this longer question.
       const stopListeningTimeout = setTimeout(() => {
         if (SpeechRecognition.browserSupportsSpeechRecognition()) {
            console.log("DEBUG: 10 second timer elapsed. Stopping listening.");
            SpeechRecognition.stopListening();
         }
-      }, 10000); // 10,000 milliseconds = 10 seconds
+      }, 10000); 
 
-      // It's good practice to clean up the timer if the component unmounts
       return () => {
         clearTimeout(stopListeningTimeout);
       };
@@ -86,11 +101,12 @@ export default function GodAct6() {
 
   // Effect 3: Auto-submits the answer
   useEffect(() => {
-    if (finalTranscript && !isLoading) {
-      console.log("User voice input received:", finalTranscript);
-      submitAnswer(finalTranscript, 'voice');
-    }
-  }, [finalTranscript, isLoading]);
+      if (finalTranscript && !isLoading) {
+        const capitalizedAnswer = finalTranscript.charAt(0).toUpperCase() + finalTranscript.slice(1);
+        console.log("DEBUG: Original transcript received:", capitalizedAnswer);
+        submitAnswer(capitalizedAnswer, 'voice');
+      }
+    }, [finalTranscript, isLoading]);
 
   // --- AUDIO & HELPER FUNCTIONS ---
   const stopSpeaking = () => {
@@ -106,53 +122,41 @@ export default function GodAct6() {
     setIsSpeaking(false);
   };
 
-  const speakWithElevenLabs = (text, onEndCallback = () => { }) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
-          method: 'POST',
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': ELEVENLABS_API_KEY
-          },
-          body: JSON.stringify({
-            text: text,
-            model_id: 'eleven_monolingual_v1',
-            voice_settings: { stability: 0.6, similarity_boost: 0.7 }
-          })
-        });
+  const speakWithElevenLabs = async (text, onEndCallback = () => { }) => {
+    try {
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_API_KEY
+        },
+        body: JSON.stringify({
+          text: text,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: { stability: 0.6, similarity_boost: 0.7 }
+        })
+      });
 
-        if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
+      if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
 
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        setCurrentAudio(audio);
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      setCurrentAudio(audio);
 
-        audio.onended = () => {
-          setIsSpeaking(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-          onEndCallback();
-          resolve();
-        };
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+        onEndCallback();
+      };
 
-        audio.onerror = (e) => {
-          setIsSpeaking(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-          onEndCallback();
-          reject(e);
-        };
-
-        await audio.play();
-
-      } catch (error) {
-        console.error('ElevenLabs TTS error:', error);
-        reject(error);
-      }
-    });
+      await audio.play();
+    } catch (error) {
+      console.error('ElevenLabs TTS error:', error);
+      speakWithBrowserSynthesis(text, {}, onEndCallback);
+    }
   };
 
   const speakWithBrowserSynthesis = (text, options = {}, onEndCallback = () => { }) => {
@@ -160,13 +164,6 @@ export default function GodAct6() {
     setCurrentUtterance(utterance);
 
     utterance.onend = () => {
-      setIsSpeaking(false);
-      setCurrentUtterance(null);
-      onEndCallback();
-    };
-
-    utterance.onerror = (event) => {
-      console.error('SpeechSynthesisUtterance.onerror', event);
       setIsSpeaking(false);
       setCurrentUtterance(null);
       onEndCallback();
@@ -184,10 +181,8 @@ export default function GodAct6() {
     setIsSpeaking(true);
 
     if (ELEVENLABS_API_KEY) {
-      speakWithElevenLabs(text, onEndCallback).catch(() => {
-        console.log("ElevenLabs failed, using browser's native speech synthesis.");
-        speakWithBrowserSynthesis(text, {}, onEndCallback);
-      });
+      speakWithElevenLabs(text, onEndCallback);
+      console.log("Attempting to use ElevenLabs for speech synthesis...");
     } else {
       console.log("ElevenLabs API key not found. Using browser's native speech synthesis.");
       speakWithBrowserSynthesis(text, {}, onEndCallback);
@@ -233,7 +228,6 @@ export default function GodAct6() {
       if (submissionType === 'voice') {
         speakText(data.message, () => {
           setInteractionStage('text');
-          // Play transition audio cue, same as GodAct2
           const nextPromptAudio = new Audio('/input_audio.mp3');
           nextPromptAudio.play().catch(e => console.error("Prompt audio failed to play.", e));
         });
@@ -270,7 +264,6 @@ export default function GodAct6() {
 
   const handleProceedToNext = () => {
     stopSpeaking();
-    // ADAPTATION: Navigate to the next activity page
     navigate('/GodAct7');
   };
 
@@ -292,7 +285,6 @@ export default function GodAct6() {
 
       <style>
         {`
-          /* ... [All existing CSS styles from the original file] ... */
           @import url('https://fonts.googleapis.com/css2?family=Comic+Neue&display=swap');
           @import url('https://fonts.googleapis.com/css2?family=Sen:wght@400;600;800&display=swap');
           
@@ -342,48 +334,38 @@ export default function GodAct6() {
             font-size: 14px;
           }
 
-          .audio-play-button {
+          .failsafe-button {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(35, 167, 172, 0.9);
+            background: rgba(68, 199, 216, 0.9);
             border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            border-radius: 25px;
+            padding: 8px 16px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 6px;
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 10;
             color: white;
-            font-size: 18px;
-            box-shadow: 0 4px 12px rgba(35, 167, 172, 0.3);
+            font-size: 12px;
+            font-family: 'Sen', sans-serif;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
           }
 
-          .audio-play-button:hover {
-            background: rgba(30, 138, 143, 0.95);
-            transform: scale(1.1);
-            box-shadow: 0 6px 16px rgba(35, 167, 172, 0.4);
-          }
-
-          .audio-play-button.playing {
-            background: rgba(40, 167, 69, 0.9);
-            animation: pulse 2s infinite;
-          }
-
-          @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+          .failsafe-button:hover {
+            background: rgba(50, 159, 173, 0.9);
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
           }
 
           .voice-toggle-button {
             position: absolute;
             top: 20px;
-            right: 80px;
             display: none;
+            right: 140px;
             background: ${voiceEnabled ? '#28a745' : '#dc3545'};
             border: none;
             border-radius: 20px;
@@ -539,9 +521,8 @@ export default function GodAct6() {
            gap: 15px;
          }
          
-          /* --- STYLE UPDATE --- */
          .btn-next {
-           background: #23A7AC; /* Standardized color */
+           background: #23A7AC; 
            color: white;
            border: none;
            padding: 14px 32px;
@@ -563,7 +544,7 @@ export default function GodAct6() {
          }
          
          .btn-next:hover:not(:disabled) {
-           background: #1e8a8f; /* Standardized hover color */
+           background: #1e8a8f;
            transform: translateY(-2px);
            box-shadow: 0 6px 16px rgba(35, 167, 172, 0.4);
          }
@@ -870,20 +851,18 @@ export default function GodAct6() {
             font-size: 12px;
           }
 
-          .audio-play-button {
+          .failsafe-button {
             top: 15px;
             right: 15px;
-            width: 40px;
-            height: 40px;
-            font-size: 14px;
+            padding: 6px 12px;
+            font-size: 11px;
           }
 
           .voice-toggle-button {
-            right: 60px;
+            right: 120px;
             padding: 5px 10px;
             font-size: 10px;
             display: block;
-            display: none;
           }
           
           .voice-replay-button {
@@ -969,17 +948,17 @@ export default function GodAct6() {
             font-size: 11px;
           }
 
-          .audio-play-button {
-            width: 35px;
-            height: 35px;
-            font-size: 12px;
+          .failsafe-button {
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            font-size: 10px;
           }
 
           .voice-toggle-button {
-            right: 50px;
+            right: 100px;
             padding: 4px 8px;
             font-size: 9px;
-            display: none;
           }
         }
 
@@ -1016,6 +995,11 @@ export default function GodAct6() {
             font-size: 15px;
             min-width: 15px;
           }
+          
+          .failsafe-button {
+            font-size: 9px;
+            padding: 4px 8px;
+          }
         }
         `}
       </style>
@@ -1023,11 +1007,15 @@ export default function GodAct6() {
 
       <div className="banner-section">
         <img src="/b6.png" alt="Banner Background" className="banner-img" />
-        {showPlayButton && (
-          <button className="audio-play-button" onClick={() => window.location.reload()}>
-            <FaPlay />
-          </button>
-        )}
+        {/* --- FAILSAFE RESTART BUTTON --- */}
+        <button
+          className="failsafe-button"
+          onClick={handleFailsafeRestart}
+          title="Restart Session (Failsafe)"
+        >
+          <FaRedo size={14} />
+          RESTART
+        </button>
       </div>
 
       <div className="main-content">
@@ -1064,9 +1052,7 @@ export default function GodAct6() {
                       <div key={index} style={{ marginBottom: '15px' }}>
                         <label className="field-label">{`Event ${index + 1}`}</label>
 
-                        {/* --- Conditional Rendering Logic Starts Here --- */}
                         {!feedback ? (
-                          // If there's no feedback yet, show the normal editable input field
                           <input
                             type="text"
                             className="answer-input"
@@ -1076,7 +1062,6 @@ export default function GodAct6() {
                             disabled={isLoading}
                           />
                         ) : (
-                          // After feedback, show the non-editable highlighted version of the answer
                           <div
                             className="answer-input"
                             style={{
@@ -1086,7 +1071,7 @@ export default function GodAct6() {
                               padding: '18px 24px'
                             }}
                           >
-                            {renderHighlightedText(eventsAnswers[index], feedback.misspelled_words)}
+                            {renderHighlightedText(eventsAnswers[index], feedback.misspelled_words ? feedback.misspelled_words[index] : [])}
                           </div>
                         )}
                       </div>
@@ -1135,7 +1120,7 @@ export default function GodAct6() {
               <div className="button-section">
                 {!feedback ? (
                   <button className="btn-next" onClick={handleTextSubmit} disabled={eventsAnswers.some(a => !a.trim()) || isLoading}>
-                    {isLoading ? 'CHECKING...' : 'CHECK ANSWER'}
+                    {isLoading ? <><span className="loading-spinner"></span>CHECKING...</> : 'CHECK ANSWER'}
                   </button>
                 ) : (
                   <div style={{ display: 'flex', gap: '15px' }}>

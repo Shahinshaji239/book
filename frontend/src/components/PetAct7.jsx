@@ -101,55 +101,51 @@ export default function PetAct7() {
     setIsSpeaking(false);
   };
 
-  const speakWithElevenLabs = (text, onEndCallback = () => { }) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
-          method: 'POST',
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': ELEVENLABS_API_KEY
-          },
-          body: JSON.stringify({
-            text: text,
-            model_id: 'eleven_monolingual_v1',
-            voice_settings: { stability: 0.6, similarity_boost: 0.7 }
-          })
-        });
-
-        if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
-
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        setCurrentAudio(audio);
-
-        audio.onended = () => {
-          setIsSpeaking(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-          onEndCallback();
-          resolve();
-        };
-
-        audio.onerror = (e) => {
-          setIsSpeaking(false);
-          setCurrentAudio(null);
-          URL.revokeObjectURL(audioUrl);
-          onEndCallback();
-          reject(e);
-        };
-
-        await audio.play();
-
-      } catch (error) {
-        console.error('ElevenLabs TTS error:', error);
-        reject(error);
-      }
-    });
+  const speakWithElevenLabs = async (text, onEndCallback = () => { }) => {
+    try {
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_API_KEY
+        },
+        body: JSON.stringify({
+          text: text,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: { stability: 0.6, similarity_boost: 0.7 }
+        })
+      });
+  
+      if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
+  
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      setCurrentAudio(audio);
+  
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+        onEndCallback();
+      };
+  
+      audio.onerror = (e) => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+        onEndCallback();
+      };
+  
+      await audio.play();
+  
+    } catch (error) {
+      console.error('ElevenLabs TTS error:', error);
+      // CRITICAL FIX: Call browser fallback when ElevenLabs fails
+      speakWithBrowserSynthesis(text, {}, onEndCallback);
+    }
   };
-
   const speakWithBrowserSynthesis = (text, options = {}, onEndCallback = () => { }) => {
     const utterance = new SpeechSynthesisUtterance(text);
     setCurrentUtterance(utterance);
@@ -177,9 +173,11 @@ export default function PetAct7() {
     }
     stopSpeaking();
     setIsSpeaking(true);
-
+  
     if (ELEVENLABS_API_KEY) {
-      speakWithElevenLabs(text, onEndCallback);
+      speakWithElevenLabs(text, onEndCallback).catch(() => {
+        console.log("ElevenLabs failed, fallback to browser synthesis already executed");
+      });
       console.log("Attempting to use ElevenLabs for speech synthesis...");
     } else {
       console.log("ElevenLabs API key not found. Using browser's native speech synthesis.");
@@ -907,13 +905,7 @@ export default function PetAct7() {
       <Header />
 
       <div className="banner-section">
-        <img src="/banner.png" alt="Banner Background" className="banner-img" />
-        <div className="banner-content">
-          <h1 className="banner-title">Book Facts</h1>
-        </div>
-        <div className="question-indicator">
-          QUESTION 7/15
-        </div>
+        <img src="/tp7.png" alt="Banner Background" className="banner-img" />
         {showPlayButton && (
           <button className="audio-play-button" onClick={() => new Audio('/p1.mp3').play()}>
             <FaPlay />

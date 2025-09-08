@@ -114,27 +114,37 @@ export default function PetAct15() {
           voice_settings: { stability: 0.6, similarity_boost: 0.7 }
         })
       });
-
+  
       if (!response.ok) throw new Error(`ElevenLabs API error: ${response.status}`);
-
+  
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       setCurrentAudio(audio);
-
+  
       audio.onended = () => {
         setIsSpeaking(false);
         setCurrentAudio(null);
         URL.revokeObjectURL(audioUrl);
         onEndCallback();
       };
-
+  
+      audio.onerror = (e) => {
+        setIsSpeaking(false);
+        setCurrentAudio(null);
+        URL.revokeObjectURL(audioUrl);
+        onEndCallback();
+      };
+  
       await audio.play();
+  
     } catch (error) {
       console.error('ElevenLabs TTS error:', error);
-      onEndCallback();
+      // CRITICAL FIX: Call browser fallback when ElevenLabs fails
+      speakWithBrowserSynthesis(text, {}, onEndCallback);
     }
   };
+
 
   const speakWithBrowserSynthesis = (text, options = {}, onEndCallback = () => { }) => {
     const utterance = new SpeechSynthesisUtterance(text);
@@ -156,10 +166,14 @@ export default function PetAct15() {
     }
     stopSpeaking();
     setIsSpeaking(true);
-
+  
     if (ELEVENLABS_API_KEY) {
-      speakWithElevenLabs(text, onEndCallback);
+      speakWithElevenLabs(text, onEndCallback).catch(() => {
+        console.log("ElevenLabs failed, fallback to browser synthesis already executed");
+      });
+      console.log("Attempting to use ElevenLabs for speech synthesis...");
     } else {
+      console.log("ElevenLabs API key not found. Using browser's native speech synthesis.");
       speakWithBrowserSynthesis(text, {}, onEndCallback);
     }
   };
@@ -1059,15 +1073,9 @@ export default function PetAct15() {
       <Header />
 
       <div className="banner-section">
-        <img src="/banner.png" alt="Banner Background" className="banner-img" />
+        <img src="/tp16.png" alt="Banner Background" className="banner-img" />
         
-        <div className="banner-content">
-          <h1 className="banner-title">My Star Rating</h1>
-        </div>
-        
-        <div className="question-indicator">
-          QUESTION {currentQuestion}/{totalQuestions}
-        </div>
+
 
         {/* --- NEW START SESSION BUTTON --- */}
         <button

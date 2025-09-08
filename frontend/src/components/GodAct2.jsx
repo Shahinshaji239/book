@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
-import { FaPlay, FaMicrophone, FaMicrophoneSlash, FaRocket } from "react-icons/fa";
+import { FaPlay, FaMicrophone, FaMicrophoneSlash, FaRocket, FaRedo } from "react-icons/fa";
 import Header from "./Header";
 
 export default function GodAct2() {
@@ -31,7 +31,23 @@ export default function GodAct2() {
     browserSupportsSpeechRecognition
   } = useSpeechRecognition();
 
-  // --- NEW FUNCTION TO START SESSION ---
+  // --- FAILSAFE BUTTON HANDLER - RELOADS THE ENTIRE PAGE ---
+  const handleFailsafeRestart = () => {
+    // Stop any ongoing audio/speech
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    SpeechRecognition.stopListening();
+
+    // Reload the entire page to reset everything
+    window.location.reload();
+  };
+
+  // --- FUNCTION TO START SESSION ---
   const startSession = () => {
     resetTranscript();
 
@@ -58,7 +74,7 @@ export default function GodAct2() {
     };
   };
 
-  // --- AUTO START ON PAGE LOAD ---
+  // --- AUTO START ON PAGE LOAD (PRIMARY ACTIVATION METHOD) ---
   useEffect(() => {
     const cleanup = startSession();
     return cleanup;
@@ -75,7 +91,10 @@ export default function GodAct2() {
   // Effect 3: Auto-submit voice answer
   useEffect(() => {
     if (finalTranscript && !isLoading) {
+
       const capitalizedAnswer = finalTranscript.charAt(0).toUpperCase() + finalTranscript.slice(1);
+
+      console.log("DEBUG: Original transcript received:", capitalizedAnswer);
       submitAnswer(capitalizedAnswer, 'voice');
     }
   }, [finalTranscript, isLoading]);
@@ -127,7 +146,7 @@ export default function GodAct2() {
       await audio.play();
     } catch (error) {
       console.error('ElevenLabs TTS error:', error);
-      onEndCallback();
+      speakWithBrowserSynthesis(text, {}, onEndCallback);
     }
   };
 
@@ -154,7 +173,9 @@ export default function GodAct2() {
 
     if (ELEVENLABS_API_KEY) {
       speakWithElevenLabs(text, onEndCallback);
+      console.log("Attempting to use ElevenLabs for speech synthesis...");
     } else {
+      console.log("ElevenLabs API key not found. Using browser's native speech synthesis.");
       speakWithBrowserSynthesis(text, {}, onEndCallback);
     }
   };
@@ -292,48 +313,38 @@ export default function GodAct2() {
             font-size: 14px;
           }
 
-          .audio-play-button {
+          .failsafe-button {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(35, 167, 172, 0.9);
+            background: rgba(68, 199, 216, 0.9);
             border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
+            border-radius: 25px;
+            padding: 8px 16px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 6px;
             cursor: pointer;
             transition: all 0.3s ease;
             z-index: 10;
             color: white;
-            font-size: 18px;
-            box-shadow: 0 4px 12px rgba(35, 167, 172, 0.3);
+            font-size: 12px;
+            font-family: 'Sen', sans-serif;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
           }
 
-          .audio-play-button:hover {
-            background: rgba(30, 138, 143, 0.95);
-            transform: scale(1.1);
-            box-shadow: 0 6px 16px rgba(35, 167, 172, 0.4);
-          }
-
-          .audio-play-button.playing {
-            background: rgba(40, 167, 69, 0.9);
-            animation: pulse 2s infinite;
-          }
-
-          @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+          .failsafe-button:hover {
+            background: rgba(50, 159, 173, 0.9);
+            transform: scale(1.05);
+            box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
           }
 
           .voice-toggle-button {
             position: absolute;
             top: 20px;
             display: none;
-            right: 80px;
+            right: 140px;
             background: ${voiceEnabled ? '#28a745' : '#dc3545'};
             border: none;
             border-radius: 20px;
@@ -653,7 +664,7 @@ export default function GodAct2() {
             display: block;
           }
 
-          /* IMPROVED RESPONSIVE DESIGN - SAME AS GODACT1 */
+          /* IMPROVED RESPONSIVE DESIGN */
           @media (max-width: 1024px) {
             .main-content {
               padding: 30px 40px;
@@ -758,16 +769,15 @@ export default function GodAct2() {
               font-size: 12px;
             }
 
-            .audio-play-button {
+            .failsafe-button {
               top: 15px;
               right: 15px;
-              width: 40px;
-              height: 40px;
-              font-size: 14px;
+              padding: 6px 12px;
+              font-size: 11px;
             }
 
             .voice-toggle-button {
-              right: 60px;
+              right: 120px;
               padding: 5px 10px;
               font-size: 10px;
               display: block;
@@ -838,14 +848,15 @@ export default function GodAct2() {
               font-size: 11px;
             }
 
-            .audio-play-button {
-              width: 35px;
-              height: 35px;
-              font-size: 12px;
+            .failsafe-button {
+              top: 10px;
+              right: 10px;
+              padding: 5px 10px;
+              font-size: 10px;
             }
 
             .voice-toggle-button {
-              right: 50px;
+              right: 100px;
               padding: 4px 8px;
               font-size: 9px;
             }
@@ -876,6 +887,11 @@ export default function GodAct2() {
             .answer-input {
               border-radius: 10px;
             }
+
+            .failsafe-button {
+              font-size: 9px;
+              padding: 4px 8px;
+            }
           }
        `}
       </style>
@@ -884,13 +900,14 @@ export default function GodAct2() {
       <div className="banner-section">
         <img src="/b2.png" alt="Banner Background" className="banner-img" />
 
-        {/* --- NEW START SESSION BUTTON --- */}
+        {/* --- FAILSAFE RESTART BUTTON --- */}
         <button
-          className="audio-play-button"
-          onClick={startSession}
-          title="Start Session"
+          className="failsafe-button"
+          onClick={handleFailsafeRestart}
+          title="Restart Session (Failsafe)"
         >
-          <FaRocket />
+          <FaRedo size={14} />
+          RESTART
         </button>
       </div>
 
@@ -901,7 +918,7 @@ export default function GodAct2() {
 
         <div className="content-with-button">
 
-          {/* --- CONDITIONAL UI (from GodAct1) --- */}
+          {/* --- CONDITIONAL UI --- */}
           {interactionStage === 'voice' ? (
             // UI for voice input stage
             <div className="voice-input-section" style={{ textAlign: 'center', padding: '40px', background: 'white', borderRadius: '20px', boxShadow: '0 8px 25px rgba(0,0,0,0.1)' }}>
@@ -918,7 +935,7 @@ export default function GodAct2() {
               )}
             </div>
           ) : (
-            // UI for text input stage (your original GodAct2 UI)
+            // UI for text input stage
             <>
               <div className="question-section">
                 <h2 className="question-title">Who is the author of this story?</h2>
