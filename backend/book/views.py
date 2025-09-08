@@ -1,4 +1,3 @@
-# Django Views (API Only) - No templates needed!
 from venv import logger
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -294,7 +293,7 @@ IMPORTANT: Always respond with valid JSON in this exact format:
     "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "incorrect",
     "show_answer": true/false,
-    "correct_answer": "Traditional folk tale (no single author)",
+    "correct_answer": "Traditional folk tale (no single author)"
     "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
@@ -612,7 +611,7 @@ IMPORTANT: Always respond with valid JSON in this exact format:
     "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "needs_improvement",
     "show_answer": true/false,
-    "correct_answer": "Goldilocks, Papa Bear, Mama Bear, and Baby Bear",
+    "correct_answer": "Goldilocks, Papa Bear, Mama Bear, and Baby Bear"
     "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
@@ -808,7 +807,7 @@ IMPORTANT: Always respond with valid JSON in this exact format:
     "message": "Your feedback message here",
     "feedback_type": "excellent", "good", "partial", or "needs_improvement",
     "show_answer": true/false,
-    "correct_answer": "In the woods and at the bears' house",
+    "correct_answer": "In the woods and at the bears' house"
     "misspelled_words": ["list", "of", "misspelled", "words"]
 }}
 
@@ -1340,202 +1339,204 @@ def create_goldilocks_favourite_character_fallback_response(user_answer):
             'show_answer': False
         })
 
-@csrf_exempt
-@require_http_methods(["POST"])
-def check_question8_answer(request):
-    """
-    API endpoint to check Question 8 answer - Story Moral/Lesson
-    """
-    try:
-        data = json.loads(request.body)
-        user_answer = data.get('answer', '').strip()
+# @csrf_exempt
+# @require_http_methods(["POST"])
+# def check_question8_answer(request):
+#     """
+#     API endpoint to check Question 8 answer - Story Moral/Lesson
+#     """
+#     try:
+#         data = json.loads(request.body)
+#         user_answer = data.get('answer', '').strip()
         
-        if not user_answer:
-            return JsonResponse({
-                'error': 'Please write about the lesson or moral of the story.'
-            }, status=400)
+#         if not user_answer:
+#             return JsonResponse({
+#                 'error': 'Please write about the lesson or moral of the story.'
+#             }, status=400)
 
-        # Basic validation checks
-        if len(user_answer) < 10:
-            return JsonResponse({
-                'isCorrect': False,
-                'message': 'Please write 1-2 complete sentences about what lesson or moral you learned from the story.',
-                'feedback_type': 'guidance',
-                'show_answer': False
-            })
+#         # Basic validation checks
+#         if len(user_answer) < 10:
+#             return JsonResponse({
+#                 'isCorrect': False,
+#                 'message': 'Please write 1-2 complete sentences about what lesson or moral you learned from the story.',
+#                 'feedback_type': 'guidance',
+#                 'show_answer': False
+#             })
 
-        if not user_answer[0].isupper():
-            return JsonResponse({
-                'isCorrect': False,
-                'message': 'Remember to start your sentence with a capital letter.',
-                'feedback_type': 'correction',
-                'show_answer': False,
-                'highlight_issue': 'capitalization'
-            })
+#         if not user_answer[0].isupper():
+#             return JsonResponse({
+#                 'isCorrect': False,
+#                 'message': 'Remember to start your sentence with a capital letter.',
+#                 'feedback_type': 'correction',
+#                 'show_answer': False,
+#                 'highlight_issue': 'capitalization'
+#             })
 
-        # AI-powered analysis for the moral/lesson question
-        return analyze_moral_answer(user_answer)
+#         # AI-powered analysis for the moral/lesson question
+#         return analyze_moral_answer(user_answer)
 
-    except json.JSONDecodeError:
-        return JsonResponse({'error': 'Invalid data format.'}, status=400)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+#     except json.JSONDecodeError:
+#         return JsonResponse({'error': 'Invalid data format.'}, status=400)
+#     except Exception as e:
+#         return JsonResponse({'error': str(e)}, status=500)
 
 
-def analyze_moral_answer(user_answer):
-    """
-    Use AI to analyze the moral/lesson answer specifically
-    """
-    api_key = os.getenv('OPENROUTER_API_KEY2')
-    if not api_key:
-        return create_moral_fallback_response(user_answer)
+# def analyze_moral_answer(user_answer):
+#     """
+#     Use AI to analyze the moral/lesson answer specifically
+#     """
+#     api_key = os.getenv('OPENROUTER_API_KEY2')
+#     if not api_key:
+#         return create_moral_fallback_response(user_answer)
 
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://your-app-domain.com",
-        "X-Title": "Story Moral Checker"
-    }
+#     url = "https://openrouter.ai/api/v1/chat/completions"
+#     headers = {
+#         "Authorization": f"Bearer {api_key}",
+#         "Content-Type": "application/json",
+#         "HTTP-Referer": "https://your-app-domain.com",
+#         "X-Title": "Story Moral Checker"
+#     }
 
-    prompt = f"""You are a helpful reading teacher checking if a student correctly identified the moral or lesson from "Goldilocks and the Three Bears". Your task is twofold:
-1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
-2. Identify any misspelled English words in their answer.
+#     prompt = f"""You are a helpful reading teacher checking if a student correctly identified the moral or lesson from "Goldilocks and the Three Bears". Your task is twofold:
+# 1. Evaluate the correctness of the student's answer about the story "Goldilocks and the Three Bears".
+# 2. Identify any misspelled English words in their answer.
 
-The main morals/lessons from the Goldilocks story include:
-- Don't enter someone else's home without permission
-- Respect other people's property
-- Don't take things that don't belong to you
-- Be careful and think before you act
-- Don't be too curious or nosy
-- Respect boundaries and privacy
-- Think about how your actions affect others
+# The main morals/lessons from the Goldilocks story include:
+# - Don't enter someone else's home without permission
+# - Respect other people's property
+# - Don't take things that don't belong to you
+# - Be careful and think before you act
+# - Don't be too curious or nosy
+# - Respect boundaries and privacy
+# - Think about how your actions affect others
 
-IMPORTANT: Always respond with valid JSON in this exact format:
-{{
-    "isCorrect": true/false,
-    "message": "Your encouraging feedback message here",
-    "feedback_type": "excellent", "good", "partial", or "needs_improvement",
-    "show_answer": false
-    "misspelled_words": ["list", "of", "misspelled", "words"]
-}}
+# IMPORTANT: Always respond with valid JSON in this exact format:
+# {{
+#     "isCorrect": true/false,
+#     "message": "Your encouraging feedback message here",
+#     "feedback_type": "excellent", "good", "partial", or "needs_improvement",
+#     "show_answer": false
+#     "misspelled_words": ["list", "of", "misspelled", "words"]
+# }}
 
-Note on "misspelled_words":
-- This must be a list of strings.
-- Only include words that are clearly misspelled. Do not include proper nouns.
-- If there are no spelling mistakes, return an empty list: [].
+# Note on "misspelled_words":
+# - This must be a list of strings.
+# - Only include words that are clearly misspelled. Do not include proper nouns.
+# - If there are no spelling mistakes, return an empty list: [].
 
-Guidelines for moral/lesson question:
-- If they identify a clear moral/lesson from the story, mark as "excellent"
-- If they mention a related concept but not quite the main lesson, mark as "good"
-- If they have some understanding but it's unclear, mark as "partial"
-- If they don't mention any lesson or give unrelated answers, mark as "needs_improvement"
-- Accept various ways of expressing the same concept (e.g., "don't go in houses" vs "respect privacy")
-- Always be encouraging and positive about their understanding
-- Focus on whether they understood that Goldilocks' actions were wrong
-- For moral questions, never show a "correct answer" since there can be multiple valid interpretations
-- Always set show_answer to false
+# Guidelines for moral/lesson question:
+# - If they identify a clear moral/lesson from the story, mark as "excellent"
+# - If they mention a related concept but not quite the main lesson, mark as "good"
+# - If they have some understanding but it's unclear, mark as "partial"
+# - If they don't mention any lesson or give unrelated answers, mark as "needs_improvement"
+# - Accept various ways of expressing the same concept (e.g., "don't go in houses" vs "respect privacy")
+# - Always be encouraging and positive about their understanding
+# - Focus on whether they understood that Goldilocks' actions were wrong
+# - For moral questions, never show a "correct answer" since there can be multiple valid interpretations
+# - Always set show_answer to false
 
-Student's answer: "{user_answer}\""""
+# Student's answer: "{user_answer}\""""
 
-    payload = {
-        "model": "openai/gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": f'Please analyze this moral/lesson answer: "{user_answer}"'}
-        ],
-        "temperature": 0.3,
-        "max_tokens": 250
-    }
+#     payload = {
+#         "model": "openai/gpt-4o-mini",
+#         "messages": [
+#             {"role": "system", "content": prompt},
+#             {"role": "user", "content": f'Please analyze this moral/lesson answer: "{user_answer}"'}
+#         ],
+#         "temperature": 0.3,
+#         "max_tokens": 250
+#     }
 
-    try:
-        response = requests.post(url, headers=headers, json=payload, timeout=15)
-        if response.status_code == 200:
-            result_raw = response.json()['choices'][0]['message']['content'].strip()
+#     try:
+#         response = requests.post(url, headers=headers, json=payload, timeout=15)
+#         if response.status_code == 200:
+#             result_raw = response.json()['choices'][0]['message']['content'].strip()
             
-            try:
-                # Try to parse JSON response
-                parsed_result = json.loads(result_raw)
-                # Ensure the response has the correct format
-                if 'result' in parsed_result and 'message' not in parsed_result:
-                    parsed_result['message'] = parsed_result['result']
+#             try:
+#                 # Try to parse JSON response
+#                 parsed_result = json.loads(result_raw)
+#                 # Ensure the response has the correct format
+#                 if 'result' in parsed_result and 'message' not in parsed_result:
+#                     parsed_result['message'] = parsed_result['result']
                 
-                # Set isCorrect based on feedback_type
-                feedback_type = parsed_result.get('feedback_type', 'needs_improvement')
-                parsed_result['isCorrect'] = feedback_type in ['excellent', 'good', 'partial']
+#                 # Set isCorrect based on feedback_type
+#                 feedback_type = parsed_result.get('feedback_type', 'needs_improvement')
+#                 parsed_result['isCorrect'] = feedback_type in ['excellent', 'good', 'partial']
                 
-                return JsonResponse(parsed_result)
-            except json.JSONDecodeError:
-                # Fallback if AI doesn't return proper JSON
-                return create_moral_fallback_response(user_answer)
+#                 return JsonResponse(parsed_result)
+#             except json.JSONDecodeError:
+#                 # Fallback if AI doesn't return proper JSON
+#                 return create_moral_fallback_response(user_answer)
         
-        return JsonResponse({
-            'error': f'AI service temporarily unavailable. Please try again.'
-        }, status=500)
+#         return JsonResponse({
+#             'error': f'AI service temporarily unavailable. Please try again.'
+#         }, status=500)
 
-    except requests.RequestException as e:
-        return JsonResponse({
-            'error': 'Unable to check answer right now. Please try again.'
-        }, status=500)
+#     except requests.RequestException as e:
+#         return JsonResponse({
+#             'error': 'Unable to check answer right now. Please try again.'
+#         }, status=500)
 
 
-def create_moral_fallback_response(user_answer):
-    """
-    Create a fallback response for moral/lesson question if AI service fails
-    """
-    user_lower = user_answer.lower()
+# def create_moral_fallback_response(user_answer):
+#     """
+#     Create a fallback response for moral/lesson question if AI service fails
+#     """
+#     user_lower = user_answer.lower()
     
-    # Check for moral/lesson keywords
-    moral_keywords = {
-        'permission': any(word in user_lower for word in ['permission', 'ask', 'allowed', 'invited']),
-        'property': any(word in user_lower for word in ['property', 'belong', 'theirs', 'not mine', 'not yours']),
-        'respect': any(word in user_lower for word in ['respect', 'polite', 'manners', 'courteous']),
-        'careful': any(word in user_lower for word in ['careful', 'think', 'before', 'consider']),
-        'curious': any(word in user_lower for word in ['curious', 'nosy', 'snoop', 'spy']),
-        'boundaries': any(word in user_lower for word in ['boundaries', 'privacy', 'private', 'personal']),
-        'wrong': any(word in user_lower for word in ['wrong', 'bad', 'shouldn\'t', 'not right', 'mistake']),
-        'home': any(word in user_lower for word in ['home', 'house', 'enter', 'go in', 'break in'])
-    }
+#     # Check for moral/lesson keywords
+#     moral_keywords = {
+#         'permission': any(word in user_lower for word in ['permission', 'ask', 'allowed', 'invited']),
+#         'property': any(word in user_lower for word in ['property', 'belong', 'theirs', 'not mine', 'not yours']),
+#         'respect': any(word in user_lower for word in ['respect', 'polite', 'manners', 'courteous']),
+#         'careful': any(word in user_lower for word in ['careful', 'think', 'before', 'consider']),
+#         'curious': any(word in user_lower for word in ['curious', 'nosy', 'snoop', 'spy']),
+#         'boundaries': any(word in user_lower for word in ['boundaries', 'privacy', 'private', 'personal']),
+#         'wrong': any(word in user_lower for word in ['wrong', 'bad', 'shouldn\'t', 'not right', 'mistake']),
+#         'home': any(word in user_lower for word in ['home', 'house', 'enter', 'go in', 'break in'])
+#     }
     
-    # Check for reasoning/explanation words
-    reasoning_words = ['because', 'since', 'when', 'if', 'then', 'so', 'therefore', 'learned', 'teaches']
-    has_reasoning = any(word in user_lower for word in reasoning_words)
+#     # Check for reasoning/explanation words
+#     reasoning_words = ['because', 'since', 'when', 'if', 'then', 'so', 'therefore', 'learned', 'teaches']
+#     has_reasoning = any(word in user_lower for word in reasoning_words)
     
-    # Count how many moral concepts they mentioned
-    moral_concepts = sum(moral_keywords.values())
+#     # Count how many moral concepts they mentioned
+#     moral_concepts = sum(moral_keywords.values())
     
-    if moral_concepts >= 2 and has_reasoning and len(user_answer) >= 20:
-        return JsonResponse({
-            'isCorrect': True,
-            'message': 'Excellent! You identified important lessons from the Goldilocks story and explained them well.',
-            'feedback_type': 'excellent',
-            'show_answer': False
-        })
-    elif moral_concepts >= 1 and has_reasoning and len(user_answer) >= 15:
-        return JsonResponse({
-            'isCorrect': True,
-            'message': 'Good job! You understood an important lesson from the story.',
-            'feedback_type': 'good',
-            'show_answer': False
-        })
-    elif moral_concepts >= 1 and len(user_answer) >= 10:
-        return JsonResponse({
-            'isCorrect': True,
-            'message': 'You have the right idea! Can you explain more about why this lesson is important?',
-            'feedback_type': 'partial',
-            'show_answer': False
-        })
-    elif moral_concepts >= 1:
-        return JsonResponse({
-            'isCorrect': True,
-            'message': 'You mentioned something about the story! Try to write more about what lesson or moral you learned.',
-            'feedback_type': 'partial',
-            'show_answer': False
-        })
-    else:
-        return JsonResponse({
-            'isCorrect': False,
-            'message': 'Think about what Goldilocks did wrong in the story. What lesson can we learn from her actions?',
-            'feedback_type': 'needs_improvement',
-            'show_answer': False
-        })
+#     if moral_concepts >= 2 and has_reasoning and len(user_answer) >= 20:
+#         return JsonResponse({
+#             'isCorrect': True,
+#             'message': 'Excellent! You identified important lessons from the Goldilocks story and explained them well.',
+#             'feedback_type': 'excellent',
+#             'show_answer': False
+#         })
+#     elif moral_concepts >= 1 and has_reasoning and len(user_answer) >= 15:
+#         return JsonResponse({
+#             'isCorrect': True,
+#             'message': 'Good job! You understood an important lesson from the story.',
+#             'feedback_type': 'good',
+#             'show_answer': False
+#         })
+#     elif moral_concepts >= 1 and len(user_answer) >= 10:
+#         return JsonResponse({
+#             'isCorrect': True,
+#             'message': 'You have the right idea! Can you explain more about why this lesson is important?',
+#             'feedback_type': 'partial',
+#             'show_answer': False
+#         })
+#     elif moral_concepts >= 1:
+#         return JsonResponse({
+#             'isCorrect': True,
+#             'message': 'You mentioned something about the story! Try to write more about what lesson or moral you learned.',
+#             'feedback_type': 'partial',
+#             'show_answer': False
+#         })
+#     else:
+#         return JsonResponse({
+#             'isCorrect': False,
+#             'message': 'Think about what Goldilocks did wrong in the story. What lesson can we learn from her actions?',
+#             'feedback_type': 'needs_improvement',
+#             'show_answer': False
+#         })
+
+        

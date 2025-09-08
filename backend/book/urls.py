@@ -13,7 +13,6 @@ urlpatterns = [
     path('api/check-question5/', views.check_question5_answer, name='check_question5_answer'),
     path('api/check-question6/', views.check_question6_answer, name='check_question6_answer'),
     path('api/check-goldilocks-favourite-character/', views.check_goldilocks_favourite_character_answer, name='check_goldilocks_favourite_character'),
-    path('api/check-question8/', views.check_question8_answer, name='check_question8_answer'),
 
 
 ]
